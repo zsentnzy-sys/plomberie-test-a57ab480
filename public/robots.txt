@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /unsubscribe
+Disallow: /email/unsubscribe
+
+Sitemap: https://plomberie-test.lovable.app/sitemap.xml

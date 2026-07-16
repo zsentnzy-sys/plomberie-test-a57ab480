@@ -1,0 +1,13 @@
+# Plomberie Dupont
+
+> Artisan plombier chauffagiste à Metz : dépannage 24/7, chauffage, sanitaire et rénovation. Devis gratuit et tarifs transparents.
+
+## Pages
+
+- [Accueil](/): Présentation des services de plomberie et chauffage à Metz.
+- [Services](/services): Dépannage, recherche de fuite, chaudière et rénovation de salle de bain.
+- [Devis gratuit](/devis): Demande de devis en ligne sans engagement.
+- [Prendre rendez-vous](/rendez-vous): Réservation d'une intervention en ligne.
+- [À propos](/a-propos): L'artisan, ses engagements et la zone d'intervention.
+- [Avis clients](/avis): Témoignages de clients à Metz.
+- [Contact](/contact): Téléphone, WhatsApp et formulaire de contact, urgences 24/7.
