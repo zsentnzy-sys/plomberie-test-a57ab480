@@ -1,41 +1,57 @@
-# Optimiser les polices et nettoyer les dépendances
+## Objectif
 
-Objectif : réduire la taille du bundle et accélérer le chargement en (1) simplifiant le chargement des polices et (2) supprimant les paquets npm et fichiers UI qui ne sont jamais importés dans le code applicatif.
+Ajouter une page **Politique de confidentialité** accessible depuis le footer, conforme au RGPD, dans le même style que la page Mentions légales existante.
 
-## 1. Polices
+## Ce qui sera fait
 
-Actuellement `src/routes/__root.tsx` importe 4 fichiers CSS statiques Inter (400, 500, 600, 700), chacun embarquant tous les sous-ensembles (latin, latin-ext, cyrillic, greek, vietnamese…), plus Sora Variable complet.
+### 1. Nouvelle route `/politique-de-confidentialite`
+Créer `src/routes/politique-de-confidentialite.tsx` sur le modèle visuel de `src/routes/mentions-legales.tsx` (mêmes composants `LegalSection` / `LegalInformation`, même mise en page, `noindex, follow`).
 
-Changements :
-- Remplacer les 4 imports `@fontsource/inter/{400,500,600,700}.css` par un unique `@fontsource-variable/inter/wght.css` (une seule police variable, un seul fichier).
-- Restreindre Sora au sous-ensemble latin : `@fontsource-variable/sora/latin.css` au lieu de `/index.css`.
-- Ajouter `@fontsource-variable/inter` dans package.json (Sora est déjà présent).
-- Retirer `@fontsource/inter` de package.json (plus utilisé).
+### 2. Contenu RGPD couvert
+Sections rédigées en français, adaptées au site (formulaires contact / devis / rendez-vous, dashboard admin, emails transactionnels via `notify.normalweb.cloud`, IP collectée pour anti-spam) :
 
-Résultat attendu : ~6–8 fichiers de polices en moins téléchargés, LCP plus rapide, aucun changement visuel (mêmes familles, mêmes graisses).
+1. Responsable du traitement (réutilise les infos `site.ts` — nom, adresse, email, SIRET)
+2. Données collectées
+   - Formulaires : nom, email, téléphone, message, type de demande
+   - Techniques : adresse IP, user-agent (anti-spam / rate limiting)
+   - Compte admin : email d'authentification
+3. Finalités du traitement
+   - Répondre aux demandes de contact / devis / rendez-vous
+   - Envoi d'emails de confirmation et de notification
+   - Prévention des abus (rate limiting par IP)
+   - Gestion administrative interne
+4. Bases légales (art. 6 RGPD)
+   - Mesures précontractuelles (devis / RDV) — art. 6.1.b
+   - Intérêt légitime (anti-spam, sécurité, gestion admin) — art. 6.1.f
+   - Consentement pour les communications non essentielles — art. 6.1.a
+5. Destinataires
+   - L'artisan et personnel autorisé
+   - Sous-traitants : hébergeur, fournisseur de base de données, prestataire d'envoi d'emails (mentionnés génériquement, sans nommer Lovable/Supabase/Resend)
+6. Durées de conservation
+   - Demandes de contact : 3 ans après le dernier échange
+   - Devis / rendez-vous : 3 ans (prospects) / 10 ans (obligations comptables si contrat)
+   - Logs techniques et rate-limit : 12 mois maximum
+   - Compte admin : durée d'activité du compte
+7. Transferts hors UE — indiqué "aucun transfert hors UE" par défaut, à confirmer
+8. Sécurité — HTTPS, RLS, authentification admin, rate limiting
+9. Droits des personnes (art. 15 à 22 RGPD) : accès, rectification, effacement, limitation, opposition, portabilité, retrait du consentement, directives post-mortem — avec l'email de contact du site
+10. Réclamation auprès de la CNIL (mention obligatoire + lien cnil.fr)
+11. Cookies — mention que le site n'utilise que des cookies strictement nécessaires (pas d'analytics tiers actuellement) ; renvoi vers cette section depuis les mentions légales
+12. Modifications de la politique + date de dernière mise à jour
 
-## 2. Dépendances npm inutilisées
+### 3. Lien dans le footer
+Dans `src/components/Footer.tsx`, ajouter dans la colonne « Navigation », juste sous « Mentions légales » :
+```
+{ to: "/politique-de-confidentialite", label: "Politique de confidentialité" }
+```
 
-Aucune référence dans `src/` (hors composants shadcn eux-mêmes non importés) → à retirer de `package.json` :
+### 4. Détails techniques
+- Head : `title`, `description`, `robots: noindex, follow`
+- Ajouter le lien vers `/politique-de-confidentialite` depuis la section « Données personnelles » de `mentions-legales.tsx`
+- Pas d'ajout au `sitemap.xml` ni au `llms.txt` (page utilitaire non promotionnelle, cohérent avec le traitement actuel des mentions légales)
+- Aucune modification base de données, aucun nouveau composant partagé
 
-- `cmdk`, `vaul`, `embla-carousel-react`, `recharts`, `react-resizable-panels`, `input-otp`, `react-day-picker`, `date-fns`
-- Radix non utilisés : `@radix-ui/react-accordion`, `react-aspect-ratio`, `react-avatar`, `react-checkbox`, `react-collapsible`, `react-context-menu`, `react-dropdown-menu`, `react-hover-card`, `react-menubar`, `react-navigation-menu`, `react-popover`, `react-progress`, `react-radio-group`, `react-scroll-area`, `react-slider`, `react-switch`, `react-tabs`, `react-toggle`, `react-toggle-group`
-
-Conservés parce qu'utilisés (directement ou par `sidebar` du dashboard admin) : `react-alert-dialog`, `react-dialog`, `react-label`, `react-select`, `react-slot`, `react-separator`, `react-tooltip`, plus `sonner`, `lucide-react`, `zod`, etc.
-
-## 3. Fichiers shadcn/ui inutilisés à supprimer
-
-Correspondants aux paquets retirés, aucun `import` dans le code applicatif :
-
-`accordion.tsx`, `alert.tsx`, `aspect-ratio.tsx`, `avatar.tsx`, `badge.tsx`, `breadcrumb.tsx`, `calendar.tsx`, `carousel.tsx`, `chart.tsx`, `checkbox.tsx`, `collapsible.tsx`, `command.tsx`, `context-menu.tsx`, `drawer.tsx`, `dropdown-menu.tsx`, `form.tsx`, `hover-card.tsx`, `input-otp.tsx`, `menubar.tsx`, `navigation-menu.tsx`, `pagination.tsx`, `popover.tsx`, `progress.tsx`, `radio-group.tsx`, `resizable.tsx`, `scroll-area.tsx`, `slider.tsx`, `switch.tsx`, `tabs.tsx`, `toggle.tsx`, `toggle-group.tsx`.
-
-Conservés : `alert-dialog`, `button`, `card`, `dialog`, `input`, `label`, `select`, `sonner`, `table`, `textarea`, plus la chaîne utilisée par le dashboard admin (`sidebar`, `sheet`, `separator`, `skeleton`, `tooltip`).
-
-## Vérification
-
-- `bun run build` doit passer.
-- Vérifier le rendu de l'accueil (typo Inter/Sora), du header, et du dashboard `/admin` (sidebar intacte).
-
-## Hors périmètre
-
-Aucune modification de logique métier, de style, de couleurs ou de contenu.
+## Points à confirmer (valeurs par défaut sinon)
+- **Transfert hors UE** : je pars sur « aucun transfert hors UE ». Ok ?
+- **Cookies** : je déclare uniquement des cookies strictement nécessaires (session admin). Ok ?
+- **Email dédié RGPD** : j'utilise `site.email` du fichier `src/lib/site.ts`. Ok ou tu veux un email dédié `rgpd@…` ?
