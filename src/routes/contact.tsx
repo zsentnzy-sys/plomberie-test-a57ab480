@@ -14,6 +14,31 @@ import { contactSchema, type ContactInput } from "@/lib/forms.schemas";
 import { site } from "@/lib/site";
 import { useClientIpv4 } from "@/hooks/use-client-ipv4";
 
+const localBusinessJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Plumber",
+  name: site.name,
+  telephone: site.phoneRaw,
+  email: site.email,
+  url: "https://plomberie-test.lovable.app/contact",
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: "12 rue des Artisans",
+    postalCode: "57000",
+    addressLocality: site.city,
+    addressCountry: "FR",
+  },
+  areaServed: site.zone,
+  openingHoursSpecification: [
+    {
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+      opens: "08:00",
+      closes: "19:00",
+    },
+  ],
+};
+
 export const Route = createFileRoute("/contact")({
   head: () => ({
     meta: [
@@ -24,6 +49,9 @@ export const Route = createFileRoute("/contact")({
       { property: "og:url", content: "https://plomberie-test.lovable.app/contact" },
     ],
     links: [{ rel: "canonical", href: "https://plomberie-test.lovable.app/contact" }],
+    scripts: [
+      { type: "application/ld+json", children: JSON.stringify(localBusinessJsonLd) },
+    ],
   }),
   component: ContactPage,
 });
