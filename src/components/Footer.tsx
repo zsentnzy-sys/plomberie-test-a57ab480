@@ -62,6 +62,7 @@ export function Footer() {
                 { to: "/a-propos", label: "À propos de nous" },
                 { to: "/avis", label: "Avis de nos clients" },
                 { to: "/contact", label: "Contact & Urgences" },
+                { to: "/mentions-legales", label: "Mentions légales" },
               ].map((link, idx) => (
                 <li key={idx}>
                   <Link 
