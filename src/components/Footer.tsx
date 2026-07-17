@@ -63,6 +63,7 @@ export function Footer() {
                 { to: "/avis", label: "Avis de nos clients" },
                 { to: "/contact", label: "Contact & Urgences" },
                 { to: "/mentions-legales", label: "Mentions légales" },
+                { to: "/politique-de-confidentialite", label: "Politique de confidentialité" },
               ].map((link, idx) => (
                 <li key={idx}>
                   <Link 
