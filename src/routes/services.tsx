@@ -4,6 +4,35 @@ import { Button } from "@/components/ui/button";
 import { PageHero } from "@/components/PageHero";
 import { site, services, pricing } from "@/lib/site";
 
+const SITE_URL = "https://plomberie-test.lovable.app";
+const servicesJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "OfferCatalog",
+  name: `Services de plomberie et chauffage — ${site.name}`,
+  provider: {
+    "@type": "LocalBusiness",
+    name: site.name,
+    telephone: site.phoneRaw,
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: "12 rue des Artisans",
+      postalCode: "57000",
+      addressLocality: site.city,
+      addressCountry: "FR",
+    },
+  },
+  itemListElement: services.map((s) => ({
+    "@type": "Offer",
+    itemOffered: {
+      "@type": "Service",
+      name: s.title,
+      description: s.desc,
+      areaServed: site.city,
+      url: `${SITE_URL}/services#${s.slug}`,
+    },
+  })),
+};
+
 export const Route = createFileRoute("/services")({
   head: () => ({
     meta: [
@@ -14,6 +43,9 @@ export const Route = createFileRoute("/services")({
       { property: "og:url", content: "https://plomberie-test.lovable.app/services" },
     ],
     links: [{ rel: "canonical", href: "https://plomberie-test.lovable.app/services" }],
+    scripts: [
+      { type: "application/ld+json", children: JSON.stringify(servicesJsonLd) },
+    ],
   }),
   component: ServicesPage,
 });
