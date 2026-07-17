@@ -13,6 +13,7 @@ import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as RendezVousRouteImport } from './routes/rendez-vous'
+import { Route as MentionsLegalesRouteImport } from './routes/mentions-legales'
 import { Route as DevisRouteImport } from './routes/devis'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as AvisRouteImport } from './routes/avis'
@@ -50,6 +51,11 @@ const ServicesRoute = ServicesRouteImport.update({
 const RendezVousRoute = RendezVousRouteImport.update({
   id: '/rendez-vous',
   path: '/rendez-vous',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MentionsLegalesRoute = MentionsLegalesRouteImport.update({
+  id: '/mentions-legales',
+  path: '/mentions-legales',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevisRoute = DevisRouteImport.update({
@@ -153,6 +159,7 @@ export interface FileRoutesByFullPath {
   '/avis': typeof AvisRoute
   '/contact': typeof ContactRoute
   '/devis': typeof DevisRoute
+  '/mentions-legales': typeof MentionsLegalesRoute
   '/rendez-vous': typeof RendezVousRoute
   '/services': typeof ServicesRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -176,6 +183,7 @@ export interface FileRoutesByTo {
   '/avis': typeof AvisRoute
   '/contact': typeof ContactRoute
   '/devis': typeof DevisRoute
+  '/mentions-legales': typeof MentionsLegalesRoute
   '/rendez-vous': typeof RendezVousRoute
   '/services': typeof ServicesRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -201,6 +209,7 @@ export interface FileRoutesById {
   '/avis': typeof AvisRoute
   '/contact': typeof ContactRoute
   '/devis': typeof DevisRoute
+  '/mentions-legales': typeof MentionsLegalesRoute
   '/rendez-vous': typeof RendezVousRoute
   '/services': typeof ServicesRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -227,6 +236,7 @@ export interface FileRouteTypes {
     | '/avis'
     | '/contact'
     | '/devis'
+    | '/mentions-legales'
     | '/rendez-vous'
     | '/services'
     | '/sitemap.xml'
@@ -250,6 +260,7 @@ export interface FileRouteTypes {
     | '/avis'
     | '/contact'
     | '/devis'
+    | '/mentions-legales'
     | '/rendez-vous'
     | '/services'
     | '/sitemap.xml'
@@ -274,6 +285,7 @@ export interface FileRouteTypes {
     | '/avis'
     | '/contact'
     | '/devis'
+    | '/mentions-legales'
     | '/rendez-vous'
     | '/services'
     | '/sitemap.xml'
@@ -299,6 +311,7 @@ export interface RootRouteChildren {
   AvisRoute: typeof AvisRoute
   ContactRoute: typeof ContactRoute
   DevisRoute: typeof DevisRoute
+  MentionsLegalesRoute: typeof MentionsLegalesRoute
   RendezVousRoute: typeof RendezVousRoute
   ServicesRoute: typeof ServicesRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
@@ -338,6 +351,13 @@ declare module '@tanstack/react-router' {
       path: '/rendez-vous'
       fullPath: '/rendez-vous'
       preLoaderRoute: typeof RendezVousRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mentions-legales': {
+      id: '/mentions-legales'
+      path: '/mentions-legales'
+      fullPath: '/mentions-legales'
+      preLoaderRoute: typeof MentionsLegalesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/devis': {
@@ -500,6 +520,7 @@ const rootRouteChildren: RootRouteChildren = {
   AvisRoute: AvisRoute,
   ContactRoute: ContactRoute,
   DevisRoute: DevisRoute,
+  MentionsLegalesRoute: MentionsLegalesRoute,
   RendezVousRoute: RendezVousRoute,
   ServicesRoute: ServicesRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
@@ -513,3 +534,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

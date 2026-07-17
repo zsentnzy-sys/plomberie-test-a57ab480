@@ -2,10 +2,8 @@ import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/mentions-legales')({
   head: () => ({
+    title: 'Mentions légales | [Nom de l’entreprise]',
     meta: [
-      {
-        title: 'Mentions légales | [Nom de l’entreprise]',
-      },
       {
         name: 'description',
         content:
@@ -295,8 +293,7 @@ function LegalNoticesPage() {
               Conformément aux dispositions applicables à la médiation de la
               consommation, le consommateur peut recourir gratuitement au
               médiateur de la consommation dont relève l’entreprise, après
-              avoir adressé une réclamation écrite préalable à Dupont
-              Plomberie.
+              avoir adressé une réclamation écrite préalable à [Nom Entreprise].
             </p>
 
             <dl className="mt-4 grid gap-3">
