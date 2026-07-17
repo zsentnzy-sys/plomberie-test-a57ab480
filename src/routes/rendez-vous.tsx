@@ -34,9 +34,9 @@ export const Route = createFileRoute("/rendez-vous")({
       { name: "description", content: "Réservez l'intervention d'un plombier chauffagiste à Metz : choisissez votre date et votre créneau en quelques clics." },
       { property: "og:title", content: "Prendre Rendez-vous Plombier à Metz - Plomberie Dupont" },
       { property: "og:description", content: "Réservez votre créneau d'intervention plomberie en ligne." },
-      { property: "og:url", content: "/rendez-vous" },
+      { property: "og:url", content: "https://plomberie-test.lovable.app/rendez-vous" },
     ],
-    links: [{ rel: "canonical", href: "/rendez-vous" }],
+    links: [{ rel: "canonical", href: "https://plomberie-test.lovable.app/rendez-vous" }],
   }),
   component: AppointmentPage,
 });

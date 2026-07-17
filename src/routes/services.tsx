@@ -11,9 +11,9 @@ export const Route = createFileRoute("/services")({
       { name: "description", content: "Dépannage, débouchage, entretien et installation de chaudière, rénovation de salle de bain : découvrez nos prestations et une grille de tarifs claire." },
       { property: "og:title", content: "Services & Tarifs Plomberie Chauffage à Metz - Plomberie Dupont" },
       { property: "og:description", content: "Grille de tarifs transparente pour dépannage, chauffage, sanitaire et débouchage." },
-      { property: "og:url", content: "/services" },
+      { property: "og:url", content: "https://plomberie-test.lovable.app/services" },
     ],
-    links: [{ rel: "canonical", href: "/services" }],
+    links: [{ rel: "canonical", href: "https://plomberie-test.lovable.app/services" }],
   }),
   component: ServicesPage,
 });
