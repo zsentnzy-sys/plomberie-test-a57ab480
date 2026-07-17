@@ -1,45 +1,41 @@
-## Contexte
+# Optimiser les polices et nettoyer les dépendances
 
-- L'adresse email admin **n'est pas dans le code** : elle est stockée dans l'authentification du backend (utilisateur d'auth), associée au rôle `admin` via la table `user_roles`. Aujourd'hui : `sentnzy@gmail.com`.
-- **Pour la changer** : Lovable Cloud → Users → ouvrir l'utilisateur admin → modifier son email (ou via une future page Paramètres si tu le souhaites plus tard). Aucune modification de code n'est requise pour ce changement.
+Objectif : réduire la taille du bundle et accélérer le chargement en (1) simplifiant le chargement des polices et (2) supprimant les paquets npm et fichiers UI qui ne sont jamais importés dans le code applicatif.
 
-Cette demande ajuste deux points sur le flux "Mot de passe oublié" déjà implémenté.
+## 1. Polices
 
----
+Actuellement `src/routes/__root.tsx` importe 4 fichiers CSS statiques Inter (400, 500, 600, 700), chacun embarquant tous les sous-ensembles (latin, latin-ext, cyrillic, greek, vietnamese…), plus Sora Variable complet.
 
-## 1. Restreindre "Mot de passe oublié" aux seuls emails admin
+Changements :
+- Remplacer les 4 imports `@fontsource/inter/{400,500,600,700}.css` par un unique `@fontsource-variable/inter/wght.css` (une seule police variable, un seul fichier).
+- Restreindre Sora au sous-ensemble latin : `@fontsource-variable/sora/latin.css` au lieu de `/index.css`.
+- Ajouter `@fontsource-variable/inter` dans package.json (Sora est déjà présent).
+- Retirer `@fontsource/inter` de package.json (plus utilisé).
 
-Problème : aujourd'hui `resetPasswordForEmail` est appelé côté client et enverrait un email à n'importe quelle adresse. On veut que **seul un email possédant le rôle admin** déclenche un envoi.
+Résultat attendu : ~6–8 fichiers de polices en moins téléchargés, LCP plus rapide, aucun changement visuel (mêmes familles, mêmes graisses).
 
-Solution : déplacer l'envoi vers une **server function** sécurisée.
+## 2. Dépendances npm inutilisées
 
-**Nouveau fichier** `src/lib/auth.functions.ts`
-- `requestAdminPasswordReset` (`createServerFn`, POST, validé par Zod : `{ email }`).
-- Dans le handler :
-  - Charger `supabaseAdmin` via `await import("@/integrations/supabase/client.server")`.
-  - Retrouver l'utilisateur par email et vérifier qu'il a le rôle admin (`has_role` / lecture `user_roles`).
-  - **Si admin** : envoyer l'email de réinitialisation (génération du lien de récupération côté admin, redirigé vers `/admin/reset-password`).
-  - **Si non-admin / inconnu** : ne rien envoyer.
-  - Retourner toujours la même réponse générique `{ ok: true }` (ne pas révéler si l'adresse existe ou est admin — bonne pratique de sécurité).
+Aucune référence dans `src/` (hors composants shadcn eux-mêmes non importés) → à retirer de `package.json` :
 
-**Page de connexion** `src/routes/admin/login.tsx`
-- Remplacer l'appel direct `supabase.auth.resetPasswordForEmail(...)` par l'appel à la server function via `useServerFn`.
-- Garder le même message de confirmation générique : "Si cette adresse correspond au compte administrateur, un email de réinitialisation a été envoyé."
+- `cmdk`, `vaul`, `embla-carousel-react`, `recharts`, `react-resizable-panels`, `input-otp`, `react-day-picker`, `date-fns`
+- Radix non utilisés : `@radix-ui/react-accordion`, `react-aspect-ratio`, `react-avatar`, `react-checkbox`, `react-collapsible`, `react-context-menu`, `react-dropdown-menu`, `react-hover-card`, `react-menubar`, `react-navigation-menu`, `react-popover`, `react-progress`, `react-radio-group`, `react-scroll-area`, `react-slider`, `react-switch`, `react-tabs`, `react-toggle`, `react-toggle-group`
 
-> Note : le message reste volontairement générique pour ne pas divulguer quelle adresse est l'admin. Le comportement réel = seul l'email admin reçoit le lien.
+Conservés parce qu'utilisés (directement ou par `sidebar` du dashboard admin) : `react-alert-dialog`, `react-dialog`, `react-label`, `react-select`, `react-slot`, `react-separator`, `react-tooltip`, plus `sonner`, `lucide-react`, `zod`, etc.
 
----
+## 3. Fichiers shadcn/ui inutilisés à supprimer
 
-## 2. Vérifier le wiring server function
+Correspondants aux paquets retirés, aucun `import` dans le code applicatif :
 
-- `requestAdminPasswordReset` est **public** (pas de session quand on a oublié son mot de passe) → pas de `requireSupabaseAuth`. La sécurité vient de la vérification du rôle admin côté serveur avant tout envoi.
-- Aucune migration backend nécessaire.
+`accordion.tsx`, `alert.tsx`, `aspect-ratio.tsx`, `avatar.tsx`, `badge.tsx`, `breadcrumb.tsx`, `calendar.tsx`, `carousel.tsx`, `chart.tsx`, `checkbox.tsx`, `collapsible.tsx`, `command.tsx`, `context-menu.tsx`, `drawer.tsx`, `dropdown-menu.tsx`, `form.tsx`, `hover-card.tsx`, `input-otp.tsx`, `menubar.tsx`, `navigation-menu.tsx`, `pagination.tsx`, `popover.tsx`, `progress.tsx`, `radio-group.tsx`, `resizable.tsx`, `scroll-area.tsx`, `slider.tsx`, `switch.tsx`, `tabs.tsx`, `toggle.tsx`, `toggle-group.tsx`.
 
----
+Conservés : `alert-dialog`, `button`, `card`, `dialog`, `input`, `label`, `select`, `sonner`, `table`, `textarea`, plus la chaîne utilisée par le dashboard admin (`sidebar`, `sheet`, `separator`, `skeleton`, `tooltip`).
 
-## Fichiers touchés
-- `src/lib/auth.functions.ts` — **nouveau** (envoi de reset restreint aux admins).
-- `src/routes/admin/login.tsx` — utiliser la server function au lieu de l'appel client direct.
+## Vérification
 
-## Pour changer l'email admin (hors code)
-Lovable Cloud → Users → utilisateur admin → modifier l'email. Le rôle `admin` reste attaché au même compte, donc le dashboard continue de fonctionner avec la nouvelle adresse.
+- `bun run build` doit passer.
+- Vérifier le rendu de l'accueil (typo Inter/Sora), du header, et du dashboard `/admin` (sidebar intacte).
+
+## Hors périmètre
+
+Aucune modification de logique métier, de style, de couleurs ou de contenu.
