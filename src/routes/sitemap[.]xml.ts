@@ -1,38 +1,39 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type {} from "@tanstack/react-start";
-
+// Pensez à remplacer cette URL par votre vrai domaine plus tard
 const BASE_URL = "https://plomberie-test.lovable.app";
 
 interface SitemapEntry {
   path: string;
-  changefreq?: "weekly" | "monthly";
-  priority?: string;
+  lastmod?: string;
 }
 
 export const Route = createFileRoute("/sitemap.xml")({
   server: {
     handlers: {
       GET: async () => {
+        // Génère la date du jour au format YYYY-MM-DD (ex: 2026-07-17)
+        const today = new Date().toISOString().split('T')[0];
+
+        // ⚠️ Les pages en "noindex" (mentions légales, confidentialité) ont été retirées
+        // car un sitemap ne doit contenir que les pages que vous voulez voir sur Google.
         const entries: SitemapEntry[] = [
-          { path: "/", changefreq: "weekly", priority: "1.0" },
-          { path: "/services", changefreq: "monthly", priority: "0.9" },
-          { path: "/devis", changefreq: "monthly", priority: "0.9" },
-          { path: "/rendez-vous", changefreq: "monthly", priority: "0.8" },
-          { path: "/a-propos", changefreq: "monthly", priority: "0.6" },
-          { path: "/avis", changefreq: "monthly", priority: "0.6" },
-          { path: "/contact", changefreq: "monthly", priority: "0.7" },
-          { path: "/mentions-legales", changefreq: "monthly", priority: "0.3" },
-          { path: "/politique-de-confidentialite", changefreq: "monthly", priority: "0.3" },
+          { path: "/", lastmod: today },
+          { path: "/services", lastmod: today },
+          { path: "/devis", lastmod: today },
+          { path: "/rendez-vous", lastmod: today },
+          { path: "/a-propos", lastmod: today },
+          { path: "/avis", lastmod: today },
+          { path: "/contact", lastmod: today },
         ];
 
         const urls = entries.map((e) =>
           [
             `  <url>`,
             `    <loc>${BASE_URL}${e.path}</loc>`,
-            e.changefreq ? `    <changefreq>${e.changefreq}</changefreq>` : null,
-            e.priority ? `    <priority>${e.priority}</priority>` : null,
+            e.lastmod ? `    <lastmod>${e.lastmod}</lastmod>` : null,
             `  </url>`,
-          ].filter(Boolean).join("\n"),
+          ].filter(Boolean).join("\n")
         );
 
         const xml = [
@@ -43,7 +44,11 @@ export const Route = createFileRoute("/sitemap.xml")({
         ].join("\n");
 
         return new Response(xml, {
-          headers: { "Content-Type": "application/xml", "Cache-Control": "public, max-age=3600" },
+          headers: { 
+            "Content-Type": "application/xml", 
+            // Cache de 24h (86400 secondes) pour optimiser les performances serveur
+            "Cache-Control": "public, max-age=86400" 
+          },
         });
       },
     },
