@@ -12,10 +12,10 @@ export const Route = createFileRoute("/a-propos")({
       { name: "description", content: "Découvrez l'artisan derrière Plomberie Dupont : 17 ans d'expérience, valeurs de proximité et de transparence, zone d'intervention autour de Metz." },
       { property: "og:title", content: "À propos - Plombier Chauffagiste à Metz - Plomberie Dupont" },
       { property: "og:description", content: "Artisan plombier chauffagiste à Metz, 17 ans d'expérience." },
-      { property: "og:url", content: "/a-propos" },
+      { property: "og:url", content: "https://plomberie-test.lovable.app/a-propos" },
       { property: "og:image", content: portrait },
     ],
-    links: [{ rel: "canonical", href: "/a-propos" }],
+    links: [{ rel: "canonical", href: "https://plomberie-test.lovable.app/a-propos" }],
     scripts: [
       {
         type: "application/ld+json",

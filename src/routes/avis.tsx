@@ -11,9 +11,9 @@ export const Route = createFileRoute("/avis")({
       { name: "description", content: "Découvrez les avis de nos clients sur nos interventions de plomberie et chauffage à Metz : réactivité, propreté et tarifs honnêtes." },
       { property: "og:title", content: "Avis Clients - Plombier Chauffagiste à Metz - Plomberie Dupont" },
       { property: "og:description", content: "Note moyenne 4,9/5 sur nos interventions de plomberie à Metz." },
-      { property: "og:url", content: "/avis" },
+      { property: "og:url", content: "https://plomberie-test.lovable.app/avis" },
     ],
-    links: [{ rel: "canonical", href: "/avis" }],
+    links: [{ rel: "canonical", href: "https://plomberie-test.lovable.app/avis" }],
     scripts: [
       {
         type: "application/ld+json",

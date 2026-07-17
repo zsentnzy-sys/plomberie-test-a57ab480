@@ -17,10 +17,10 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "Plombier Chauffagiste à Metz | Dépannage 7j/7 - Plomberie Dupont" },
       { property: "og:description", content: "Dépannage 24/7, chauffage, sanitaire et rénovation. Devis gratuit, tarifs transparents." },
       { property: "og:type", content: "website" },
-      { property: "og:url", content: "/" },
+      { property: "og:url", content: "https://plomberie-test.lovable.app/" },
     ],
     links: [
-      { rel: "canonical", href: "/" },
+      { rel: "canonical", href: "https://plomberie-test.lovable.app/" },
       { rel: "preload", as: "image", href: heroImg, fetchpriority: "high" },
     ],
     scripts: [

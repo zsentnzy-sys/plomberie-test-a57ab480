@@ -36,9 +36,9 @@ export const Route = createFileRoute("/devis")({
       { name: "description", content: "Demandez votre devis de plomberie ou chauffage gratuit et sans engagement. Réponse rapide par un artisan à Metz." },
       { property: "og:title", content: "Devis Plomberie & Chauffage Gratuit à Metz - Plomberie Dupont" },
       { property: "og:description", content: "Devis de plomberie gratuit et sans engagement. Réponse rapide." },
-      { property: "og:url", content: "/devis" },
+      { property: "og:url", content: "https://plomberie-test.lovable.app/devis" },
     ],
-    links: [{ rel: "canonical", href: "/devis" }],
+    links: [{ rel: "canonical", href: "https://plomberie-test.lovable.app/devis" }],
   }),
   component: DevisPage,
 });

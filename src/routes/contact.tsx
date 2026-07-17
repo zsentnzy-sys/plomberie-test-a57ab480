@@ -21,9 +21,9 @@ export const Route = createFileRoute("/contact")({
       { name: "description", content: "Contactez votre plombier chauffagiste à Metz : téléphone, WhatsApp et formulaire. Urgences plomberie 24h/24 et 7j/7." },
       { property: "og:title", content: "Contact & Urgences 24/7 - Plombier à Metz - Plomberie Dupont" },
       { property: "og:description", content: "Téléphone, WhatsApp et formulaire. Urgences 24/7." },
-      { property: "og:url", content: "/contact" },
+      { property: "og:url", content: "https://plomberie-test.lovable.app/contact" },
     ],
-    links: [{ rel: "canonical", href: "/contact" }],
+    links: [{ rel: "canonical", href: "https://plomberie-test.lovable.app/contact" }],
   }),
   component: ContactPage,
 });
