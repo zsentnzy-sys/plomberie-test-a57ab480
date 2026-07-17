@@ -2,17 +2,20 @@ import { createFileRoute } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/mentions-legales')({
   head: () => ({
-    title: 'Mentions légales | [Nom de l’entreprise]',
     meta: [
+      { title: 'Mentions légales | Plomberie Dupont' },
       {
         name: 'description',
         content:
-          'Mentions légales du site [Nom Entreprise] : éditeur, hébergement, propriété intellectuelle et responsabilité.',
+          'Mentions légales du site Plomberie Dupont : éditeur, hébergement, propriété intellectuelle et responsabilité.',
       },
       {
         name: 'robots',
         content: 'noindex, follow',
       },
+      { property: 'og:title', content: 'Mentions légales | Plomberie Dupont' },
+      { property: 'og:description', content: 'Mentions légales du site Plomberie Dupont : éditeur, hébergement, propriété intellectuelle et responsabilité.' },
+      { property: 'og:url', content: 'https://plomberie-test.lovable.app/mentions-legales' },
     ],
   }),
   component: LegalNoticesPage,
