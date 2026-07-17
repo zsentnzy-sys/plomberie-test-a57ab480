@@ -180,7 +180,7 @@ function OverviewPage() {
                     boxShadow: "0 10px 30px -12px rgb(0 0 0 / 0.25)",
                   }}
                   labelStyle={{ fontWeight: 600, marginBottom: "0.25rem" }}
-                  formatter={(value) => [value, "Rendez-vous"]}
+                  formatter={(value: number | string) => [value, "Rendez-vous"]}
                 />
                 <Bar
                   dataKey="count"
