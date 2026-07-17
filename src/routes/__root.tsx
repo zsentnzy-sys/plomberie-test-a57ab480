@@ -13,7 +13,7 @@ import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Analytics } from "@vercel/analytics/react";
 
 import "@fontsource-variable/inter/wght.css";
-import "@fontsource-variable/sora/latin.css";
+import "@fontsource-variable/sora/wght.css";
 import "../styles.css";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Header } from "../components/Header";
