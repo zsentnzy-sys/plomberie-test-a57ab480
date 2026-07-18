@@ -48,10 +48,8 @@
   --color-ring-offset-background: var(--background);
   --color-urgent: var(--urgent);
   --color-urgent-foreground: var(--urgent-foreground);
-  /* --font-sans: "Inter variable", ui-sans-serif, system-ui, sans-serif; */
-  /*--font-display: "Sora Variable", "Inter variable", ui-sans-serif, sans-serif;*/
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-display: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: "Inter variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Sora Variable", "Inter variable", ui-sans-serif, sans-serif;
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);

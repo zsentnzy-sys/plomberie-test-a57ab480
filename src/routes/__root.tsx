@@ -12,15 +12,15 @@ import { useEffect, type ReactNode } from "react";
 import { SpeedInsights } from "@vercel/speed-insights/react";
 import { Analytics } from "@vercel/analytics/react";
 
-//import "@fontsource-variable/inter/wght.css";
-//import "@fontsource-variable/sora/wght.css";
+import "@fontsource-variable/inter/wght.css";
+import "@fontsource-variable/sora/wght.css";
 
 /*
  * Vite transforme ces imports en URL contenant
  * le nom de fichier hashé produit lors du build.
  */
-//import interLatinWghtUrl from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
-//import soraLatinWghtUrl from "@fontsource-variable/sora/files/sora-latin-wght-normal.woff2?url";
+import interLatinWghtUrl from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
+import soraLatinWghtUrl from "@fontsource-variable/sora/files/sora-latin-wght-normal.woff2?url";
 
 import "../styles.css";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -152,24 +152,24 @@ export const Route = createRootRouteWithContext<{
        * Placée en premier, car elle est probablement utilisée
        * dans la partie visible immédiatement.
        */
-      //{
-        //rel: "preload",
-        //href: soraLatinWghtUrl,
-        //as: "font",
-        //type: "font/woff2",
-        //crossOrigin: "anonymous",
-      //},
+      {
+        rel: "preload",
+        href: soraLatinWghtUrl,
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
+      },
 
       /*
        * Police principale du texte et de l'interface.
        */
-      //{
-        //rel: "preload",
-        //href: interLatinWghtUrl,
-        //as: "font",
-        //type: "font/woff2",
-        //crossOrigin: "anonymous",
-      //},
+      {
+        rel: "preload",
+        href: interLatinWghtUrl,
+        as: "font",
+        type: "font/woff2",
+        crossOrigin: "anonymous",
+      },
 
       {
         rel: "icon",
