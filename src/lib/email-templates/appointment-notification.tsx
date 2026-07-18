@@ -1,7 +1,7 @@
 import React from 'react'
 import { Text } from '@react-email/components'
 import type { TemplateEntry } from './registry'
-import { COLORS, DetailTable, EmailLayout, h2, paragraph } from './_brand'
+import { COLORS, DetailTable, EmailLayout, h2, paragraph, AttachmentList } from './_brand'
 
 interface Props {
   name?: string
@@ -14,6 +14,7 @@ interface Props {
   ip?: string
   server_ip?: string
   user_agent?: string
+  attachments?: Array<{ url: string; filename: string; size: number; mime: string }>
 }
 
 const Email = ({
@@ -27,6 +28,7 @@ const Email = ({
   ip,
   server_ip,
   user_agent,
+  attachments,
 }: Props) => (
   <EmailLayout
     preview={`Demande de rendez-vous de ${name || 'un client'}`}
@@ -52,6 +54,7 @@ const Email = ({
         { label: 'Appareil', value: user_agent },
       ]}
     />
+    <AttachmentList attachments={attachments} />
   </EmailLayout>
 )
 
