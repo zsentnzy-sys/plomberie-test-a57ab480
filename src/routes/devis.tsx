@@ -1,4 +1,4 @@
-import { useState, useId, cloneElement, isValidElement, type ReactElement } from "react";
+import { useMemo, useState, useId, cloneElement, isValidElement, type ReactElement } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -28,6 +28,7 @@ import { submitQuote } from "@/lib/forms.functions";
 import { quoteSchema, type QuoteInput } from "@/lib/forms.schemas";
 import { useClientIpv4 } from "@/hooks/use-client-ipv4";
 import { serviceOptions, site } from "@/lib/site";
+import { PhotoUploader } from "@/components/PhotoUploader";
 
 export const Route = createFileRoute("/devis")({
   head: () => ({
@@ -56,6 +57,12 @@ function DevisPage() {
   // États pour nos menus déroulants sur-mesure
   const [isServiceOpen, setIsServiceOpen] = useState(false);
   const [isUrgencyOpen, setIsUrgencyOpen] = useState(false);
+  const uploadToken = useMemo(
+    () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : ""),
+    [],
+  );
+  const [photosUploading, setPhotosUploading] = useState(false);
+  const [photoCount, setPhotoCount] = useState(0);
 
   const submit = useServerFn(submitQuote);
   const { trigger, getIpv4 } = useClientIpv4();
@@ -70,7 +77,13 @@ function DevisPage() {
 
   const onSubmit = async (values: QuoteInput) => {
     try {
-      await submit({ data: { ...values, client_ipv4: await getIpv4() } });
+      await submit({
+        data: {
+          ...values,
+          client_ipv4: await getIpv4(),
+          upload_token: photoCount > 0 ? uploadToken : "",
+        },
+      });
       setDone(true);
       reset();
       toast.success("Demande de devis envoyée ! Nous revenons vers vous rapidement.");
