@@ -152,24 +152,24 @@ export const Route = createRootRouteWithContext<{
        * Placée en premier, car elle est probablement utilisée
        * dans la partie visible immédiatement.
        */
-      {
+      //{
         //rel: "preload",
-        href: soraLatinWghtUrl,
-        as: "font",
-        type: "font/woff2",
-        crossOrigin: "anonymous",
-      },
+        //href: soraLatinWghtUrl,
+        //as: "font",
+        //type: "font/woff2",
+        //crossOrigin: "anonymous",
+      //},
 
       /*
        * Police principale du texte et de l'interface.
        */
-      {
+      //{
         //rel: "preload",
-        href: interLatinWghtUrl,
-        as: "font",
-        type: "font/woff2",
-        crossOrigin: "anonymous",
-      },
+        //href: interLatinWghtUrl,
+        //as: "font",
+        //type: "font/woff2",
+        //crossOrigin: "anonymous",
+      //},
 
       {
         rel: "icon",
