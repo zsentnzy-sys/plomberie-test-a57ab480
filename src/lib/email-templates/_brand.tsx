@@ -209,3 +209,48 @@ export const paragraph: React.CSSProperties = {
   lineHeight: '24px',
   margin: '0 0 16px',
 }
+
+export function AttachmentList({
+  attachments,
+}: {
+  attachments?: Array<{ url: string; filename: string; size: number; mime: string }>
+}) {
+  if (!attachments || attachments.length === 0) return null
+  return (
+    <Section style={{ marginTop: '20px' }}>
+      <Text style={{ ...h2, fontSize: '16px', margin: '0 0 8px' }}>Photos jointes</Text>
+      <Text style={{ ...paragraph, fontSize: '13px', margin: '0 0 12px', color: COLORS.muted }}>
+        Liens sécurisés valables 7 jours.
+      </Text>
+      {attachments.map((a, i) => (
+        <table
+          key={a.url}
+          width="100%"
+          cellPadding={0}
+          cellSpacing={0}
+          style={{
+            border: `1px solid ${COLORS.border}`,
+            borderRadius: '10px',
+            marginBottom: i === attachments.length - 1 ? 0 : '8px',
+          }}
+        >
+          <tbody>
+            <tr>
+              <td style={{ padding: '12px 16px', fontSize: '14px', color: COLORS.text }}>
+                <a
+                  href={a.url}
+                  style={{ color: COLORS.teal, fontWeight: 600, textDecoration: 'none' }}
+                >
+                  photo-{i + 1}
+                </a>{' '}
+                <span style={{ color: COLORS.muted, fontSize: '12px' }}>
+                  · {a.filename} · {(a.size / 1024).toFixed(0)} Ko
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      ))}
+    </Section>
+  )
+}
