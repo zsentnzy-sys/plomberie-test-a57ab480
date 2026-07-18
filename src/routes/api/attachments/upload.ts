@@ -22,11 +22,16 @@ export const Route = createFileRoute('/api/attachments/upload')({
 
           const form = await request.formData()
           const rawToken = form.get('upload_token')
+          const rawType = form.get('request_type')
           const files = form.getAll('files').filter((f): f is File => f instanceof File)
           const token = typeof rawToken === 'string' ? rawToken.trim() : ''
+          const requestType = rawType === 'quote' || rawType === 'appointment' ? rawType : null
 
           if (!/^[0-9a-f-]{36}$/i.test(token)) {
             return Response.json({ error: 'Jeton d\u2019upload invalide.' }, { status: 400 })
+          }
+          if (!requestType) {
+            return Response.json({ error: 'Type de demande invalide.' }, { status: 400 })
           }
           if (files.length === 0) {
             return Response.json({ error: 'Aucun fichier fourni.' }, { status: 400 })
@@ -74,13 +79,10 @@ export const Route = createFileRoute('/api/attachments/upload')({
           // Store under staging/<token>/... — we use the token as the "request_id"
           // slot until the submit call associates it with a real request.
           await storeAttachments(supabaseAdmin, {
-            requestType: 'quote', // placeholder; overwritten on association
+            requestType,
             requestId: token,
             files: validated,
           })
-          // Immediately re-tag rows so downstream can find them by token.
-          // We tag them with request_type='quote' and request_id=<token>; on
-          // association the server function relinks them to the actual request.
           return Response.json({ ok: true, count: validated.length })
         } catch (err) {
           console.error('attachment upload failed', err)
