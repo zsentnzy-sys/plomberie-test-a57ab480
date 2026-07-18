@@ -239,6 +239,39 @@ export type Database = {
         }
         Relationships: []
       }
+      request_attachments: {
+        Row: {
+          created_at: string
+          id: string
+          mime_type: string
+          original_filename: string
+          request_id: string
+          request_type: string
+          size_bytes: number
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mime_type: string
+          original_filename: string
+          request_id: string
+          request_type: string
+          size_bytes: number
+          storage_path: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mime_type?: string
+          original_filename?: string
+          request_id?: string
+          request_type?: string
+          size_bytes?: number
+          storage_path?: string
+        }
+        Relationships: []
+      }
       suppressed_emails: {
         Row: {
           created_at: string

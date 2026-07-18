@@ -2,6 +2,34 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequestIP, getRequestHeader } from "@tanstack/react-start/server";
 import { contactSchema, quoteSchema, appointmentSchema } from "./forms.schemas";
 
+async function associateAndBuildLinks(params: {
+  uploadToken: string;
+  requestType: "quote" | "appointment";
+  requestId: string;
+}): Promise<Array<{ url: string; filename: string; size: number; mime: string }>> {
+  if (!params.uploadToken) return [];
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { buildSignedLinks } = await import("@/lib/attachments.server");
+    // Re-tag staged rows: request_id was set to the token during upload.
+    const { data: updated, error: updErr } = await supabaseAdmin
+      .from("request_attachments")
+      .update({ request_id: params.requestId })
+      .eq("request_id", params.uploadToken)
+      .eq("request_type", params.requestType)
+      .select("storage_path, original_filename, mime_type, size_bytes");
+    if (updErr) {
+      console.error("Failed to associate attachments", updErr);
+      return [];
+    }
+    if (!updated || updated.length === 0) return [];
+    return await buildSignedLinks(supabaseAdmin, updated);
+  } catch (err) {
+    console.error("associateAndBuildLinks crashed", err);
+    return [];
+  }
+}
+
 function getClientMeta() {
   let ip: string | null = null;
   let userAgent: string | null = null;
@@ -116,6 +144,13 @@ export const submitQuote = createServerFn({ method: "POST" })
     if (error) throw new Error("Impossible d'enregistrer votre demande de devis.");
     const { enqueueTransactionalEmail, OWNER_EMAIL } = await import("@/lib/email/dispatch.server");
     const key = inserted?.id ?? data.email;
+    const attachments = inserted?.id
+      ? await associateAndBuildLinks({
+          uploadToken: (data.upload_token || "").trim(),
+          requestType: "quote",
+          requestId: inserted.id,
+        })
+      : [];
     await Promise.all([
       enqueueTransactionalEmail({
         templateName: "quote-notification",
@@ -133,6 +168,7 @@ export const submitQuote = createServerFn({ method: "POST" })
           ip: resolveClientIpv4(data.client_ipv4),
           server_ip: meta.ip,
           user_agent: meta.userAgent,
+          attachments,
         },
       }),
       enqueueTransactionalEmail({
@@ -147,7 +183,7 @@ export const submitQuote = createServerFn({ method: "POST" })
         },
       }),
     ]);
-    return { ok: true };
+    return { ok: true, request_id: inserted?.id };
   });
 
 export const submitAppointment = createServerFn({ method: "POST" })
@@ -168,6 +204,13 @@ export const submitAppointment = createServerFn({ method: "POST" })
     if (error) throw new Error("Impossible d'enregistrer votre rendez-vous.");
     const { enqueueTransactionalEmail, OWNER_EMAIL } = await import("@/lib/email/dispatch.server");
     const key = inserted?.id ?? data.email;
+    const attachments = inserted?.id
+      ? await associateAndBuildLinks({
+          uploadToken: (data.upload_token || "").trim(),
+          requestType: "appointment",
+          requestId: inserted.id,
+        })
+      : [];
     await Promise.all([
       enqueueTransactionalEmail({
         templateName: "appointment-notification",
@@ -185,6 +228,7 @@ export const submitAppointment = createServerFn({ method: "POST" })
           ip: resolveClientIpv4(data.client_ipv4),
           server_ip: meta.ip,
           user_agent: meta.userAgent,
+          attachments,
         },
       }),
       enqueueTransactionalEmail({
@@ -200,5 +244,5 @@ export const submitAppointment = createServerFn({ method: "POST" })
         },
       }),
     ]);
-    return { ok: true };
+    return { ok: true, request_id: inserted?.id };
   });
