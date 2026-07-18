@@ -301,6 +301,17 @@ function DevisPage() {
                       className="rounded-xl resize-none"
                     />
                   </Field>
+
+                  <Field label="Photos du problème ou de l'installation" optional>
+                    <PhotoUploader
+                      requestType="quote"
+                      uploadToken={uploadToken}
+                      onStatusChange={(s) => {
+                        setPhotosUploading(s.uploading);
+                        setPhotoCount(s.uploaded ? s.count : 0);
+                      }}
+                    />
+                  </Field>
                 </div>
               </div>
 
@@ -311,9 +322,9 @@ function DevisPage() {
                   variant="hero" 
                   size="lg" 
                   className="w-full h-14 rounded-xl text-base shadow-lg transition-transform hover:scale-[1.02]" 
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || photosUploading}
                 >
-                  {isSubmitting ? "Envoi de la demande…" : (
+                  {isSubmitting ? "Envoi de la demande…" : photosUploading ? "Envoi des photos…" : (
                     <>
                       Envoyer ma demande de devis <ArrowRight className="ml-2 h-5 w-5" />
                     </>
