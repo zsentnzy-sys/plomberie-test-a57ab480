@@ -1,4 +1,4 @@
-import { useState, useId, cloneElement, isValidElement, type ReactElement } from "react";
+import { useMemo, useState, useId, cloneElement, isValidElement, type ReactElement } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,6 +26,7 @@ import { submitAppointment } from "@/lib/forms.functions";
 import { appointmentSchema, type AppointmentInput } from "@/lib/forms.schemas";
 import { serviceOptions, timeSlots, site } from "@/lib/site";
 import { useClientIpv4 } from "@/hooks/use-client-ipv4";
+import { PhotoUploader } from "@/components/PhotoUploader";
 
 export const Route = createFileRoute("/rendez-vous")({
   head: () => ({
@@ -50,6 +51,12 @@ function AppointmentPage() {
   
   // Nouvel état pour gérer l'ouverture de notre menu déroulant sur-mesure
   const [isServiceOpen, setIsServiceOpen] = useState(false);
+  const uploadToken = useMemo(
+    () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : ""),
+    [],
+  );
+  const [photosUploading, setPhotosUploading] = useState(false);
+  const [photoCount, setPhotoCount] = useState(0);
   
   const submit = useServerFn(submitAppointment);
   const { trigger, getIpv4 } = useClientIpv4();
@@ -64,7 +71,13 @@ function AppointmentPage() {
 
   const onSubmit = async (values: AppointmentInput) => {
     try {
-      await submit({ data: { ...values, client_ipv4: await getIpv4() } });
+      await submit({
+        data: {
+          ...values,
+          client_ipv4: await getIpv4(),
+          upload_token: photoCount > 0 ? uploadToken : "",
+        },
+      });
       setDone(true);
       reset();
       toast.success("Rendez-vous demandé ! Nous confirmons votre créneau rapidement.");
@@ -260,6 +273,17 @@ function AppointmentPage() {
                     className="rounded-xl resize-none"
                   />
                 </Field>
+
+                <Field label="Photos du problème ou de l'installation" optional>
+                  <PhotoUploader
+                    requestType="appointment"
+                    uploadToken={uploadToken}
+                    onStatusChange={(s) => {
+                      setPhotosUploading(s.uploading);
+                      setPhotoCount(s.uploaded ? s.count : 0);
+                    }}
+                  />
+                </Field>
               </div>
             </div>
 
@@ -269,9 +293,9 @@ function AppointmentPage() {
                 variant="hero" 
                 size="lg" 
                 className="w-full h-14 rounded-xl text-base shadow-lg transition-transform hover:scale-[1.02]" 
-                disabled={isSubmitting}
+                disabled={isSubmitting || photosUploading}
               >
-                {isSubmitting ? "Validation en cours…" : (
+                {isSubmitting ? "Validation en cours…" : photosUploading ? "Envoi des photos…" : (
                   <>
                     Confirmer ma demande <ArrowRight className="ml-2 h-5 w-5" />
                   </>
