@@ -40,6 +40,7 @@ export function PhotoUploader({ requestType, uploadToken, onStatusChange }: Phot
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const emit = useCallback(
     (next: { uploading: boolean; uploaded: boolean; count: number; error: string | null }) => {
@@ -105,13 +106,96 @@ export function PhotoUploader({ requestType, uploadToken, onStatusChange }: Phot
     await upload(list);
   };
 
-  const removeAll = () => {
-    for (const p of previews) URL.revokeObjectURL(p.url);
-    setPreviews([]);
-    setUploaded(false);
+  const deleteUploadedPhotos = async () => {
+    const response = await fetch("/api/attachments/upload", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        upload_token: uploadToken,
+        request_type: requestType,
+      }),
+    });
+
+    const json = (await response.json().catch(() => null)) as {
+      error?: string;
+      deleted?: number;
+    } | null;
+
+    if (!response.ok) {
+      throw new Error(
+        json?.error || "La suppression des photos a échoué.",
+      );
+    }
+  };
+
+  const removeAll = async () => {
+    if (uploading || deleting) return;
+
     setError(null);
-    if (inputRef.current) inputRef.current.value = "";
-    emit({ uploading: false, uploaded: false, count: 0, error: null });
+    setDeleting(true);
+
+    /*
+    * On réutilise uploading=true dans le statut envoyé au parent afin
+    * de désactiver le bouton d'envoi du formulaire pendant la suppression.
+    */
+    setUploading(true);
+
+    emit({
+      uploading: true,
+      uploaded,
+      count: uploaded ? previews.length : 0,
+      error: null,
+    });
+
+    try {
+      /*
+      * Important : on supprime d'abord côté serveur.
+      * Les aperçus restent visibles si la suppression échoue.
+      */
+      await deleteUploadedPhotos();
+
+      for (const preview of previews) {
+        URL.revokeObjectURL(preview.url);
+      }
+
+      setPreviews([]);
+      setUploaded(false);
+      setError(null);
+
+      if (inputRef.current) {
+        inputRef.current.value = "";
+      }
+
+      emit({
+        uploading: false,
+        uploaded: false,
+        count: 0,
+        error: null,
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "La suppression des photos a échoué.";
+
+      /*
+      * Ne pas vider previews ici :
+      * l'utilisateur doit voir que les fichiers sont encore présents.
+      */
+      setError(message);
+
+      emit({
+        uploading: false,
+        uploaded,
+        count: uploaded ? previews.length : 0,
+        error: message,
+      });
+    } finally {
+      setDeleting(false);
+      setUploading(false);
+    }
   };
 
   return (

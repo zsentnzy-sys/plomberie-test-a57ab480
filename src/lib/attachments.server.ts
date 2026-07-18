@@ -178,6 +178,70 @@ export async function storeAttachments(
   }
 }
 
+export async function deleteStagedAttachments(
+  supabase: SupabaseClient<any, any>,
+  params: {
+    requestType: "quote" | "appointment";
+    uploadToken: string;
+  },
+): Promise<number> {
+  /*
+   * On ne recherche que les fichiers encore associés au token temporaire.
+   * Après envoi du formulaire, request_id est remplacé par l'identifiant
+   * définitif de la demande : cette route ne pourra donc plus les supprimer.
+   */
+  const { data: rows, error: selectError } = await supabase
+    .from("request_attachments")
+    .select("id, storage_path")
+    .eq("request_id", params.uploadToken)
+    .eq("request_type", params.requestType)
+    .like(
+      "storage_path",
+      `${params.requestType}/${params.uploadToken}/%`,
+    );
+
+  if (selectError) {
+    throw new Error(
+      `Impossible de rechercher les pièces jointes : ${selectError.message}`,
+    );
+  }
+
+  if (!rows || rows.length === 0) {
+    // Suppression idempotente : le lot est peut-être déjà supprimé.
+    return 0;
+  }
+
+  const storagePaths = rows.map((row) => row.storage_path);
+  const rowIds = rows.map((row) => row.id);
+
+  /*
+   * On supprime d'abord les vrais objets du Storage.
+   * On ne supprime les lignes SQL que si cette opération réussit.
+   */
+  const { error: storageError } = await supabase.storage
+    .from(BUCKET)
+    .remove(storagePaths);
+
+  if (storageError) {
+    throw new Error(
+      `Impossible de supprimer les fichiers : ${storageError.message}`,
+    );
+  }
+
+  const { error: databaseError } = await supabase
+    .from("request_attachments")
+    .delete()
+    .in("id", rowIds);
+
+  if (databaseError) {
+    throw new Error(
+      `Impossible de supprimer les pièces jointes : ${databaseError.message}`,
+    );
+  }
+
+  return rows.length;
+}
+
 /** Build signed URLs (7 days) for the artisan notification email. */
 export async function buildSignedLinks(
   supabase: SupabaseClient<any, any>,

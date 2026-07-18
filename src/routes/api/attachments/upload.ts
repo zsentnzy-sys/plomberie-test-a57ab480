@@ -89,6 +89,51 @@ export const Route = createFileRoute('/api/attachments/upload')({
           return Response.json({ error: 'L\u2019envoi des photos a \u00e9chou\u00e9.' }, { status: 500 })
         }
       },
+      DELETE: async ({ request }) => {
+        try {
+          const body = (await request.json().catch(() => null)) as {
+            upload_token?: unknown;
+            request_type?: unknown;
+          } | null
+
+          const token = 
+            typeof body?.upload_token === "string"
+              ? body.upload_token.trim()
+              : "";
+          
+          const requestType =
+            body?.request_type === "quote" ||
+            body?.request_type === "appointment"
+              ? body.request_type
+              : null;
+
+          if (!/^[0-9a-f-]{36}$/i.test(token)) {
+            return Response.json(
+              { error: "Jeton d\u2019upload invalide." },
+              { status: 400 }
+            );
+          }
+          if (!requestType) {
+            return Response.json(
+              { error: "Type de demande invalide." },
+              { status: 400 },
+            );
+          }
+          const {deleteStagedAttachments} = await import('@/lib/attachments.server');
+          const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
+          const deleted = await deleteStagedAttachments(supabaseAdmin, {
+            uploadToken: token,
+            requestType,
+          });
+          return Response.json({
+            ok: true,
+            deleted,
+          });
+        } catch (error) {
+          console.error('attachment deletion failed', error);
+          return Response.json({ error: 'La suppression des photos a échoué.' }, { status: 500 });
+        }
+      },
     },
   },
 })
