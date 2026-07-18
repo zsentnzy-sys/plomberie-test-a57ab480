@@ -6,6 +6,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { site, services, testimonials } from "@/lib/site";
 import heroImg from "@/assets/hero-plumber.webp";
+import heroMobileImg from "@/assets/hero-plumber-mobile.webp";
 import bathroomImg from "@/assets/work-bathroom.webp";
 import boilerImg from "@/assets/work-boiler.webp";
 
@@ -20,8 +21,10 @@ export const Route = createFileRoute("/")({
       { property: "og:url", content: "https://plomberie-test.lovable.app/" },
     ],
     links: [
-      { rel: "canonical", href: "https://plomberie-test.lovable.app/" },
-      { rel: "preload", as: "image", href: heroImg, fetchpriority: "high" },
+      { rel: "canonical",
+        href: "https://plomberie-test.lovable.app/",
+      },
+
     ],
     scripts: [
       {
@@ -76,10 +79,25 @@ function Index() {
               <span className="flex items-center gap-2"><Star className="h-4 w-4 text-accent" fill="currentColor" /> +500 clients satisfaits</span>
             </div>
           </div>
-          <div className="animate-fade-up [animation-delay:120ms]">
-            <div className="overflow-hidden rounded-3xl shadow-elegant ring-1 ring-primary-foreground/10">
-              <img src={heroImg} alt="Plombier chauffagiste intervenant sur une chaudière" width={1280} height={853} fetchPriority="high" className="h-full w-full object-cover" />
-            </div>
+          <div className="overflow-hidden rounded-3xl shadow-elegant ring-1 ring-primary-foreground/10">
+            <picture>
+              <source
+                media="(max-width: 639px)"
+                srcSet={heroMobileImg}
+                width={480}
+                height={320}
+              />
+                
+              <img
+                src={heroImg}
+                alt="Plombier chauffagiste en intervention"
+                width={1280}
+                height={853}
+                fetchPriority="high"
+                decoding="async"
+                className="h-full w-full object-cover"
+              />
+            </picture>                  
           </div>
         </div>
       </section>
