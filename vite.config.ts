@@ -15,7 +15,7 @@ export default defineConfig({
   // --- AJOUT DE NOTRE CONFIGURATION CSS ICI ---
   vite: {
     build: {
-      cssCodeSplit: false,
+      cssCodeSplit: true,
     },
   },
   // --------------------------------------------
