@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Phone, Check, MapPin, CalendarCheck, Home, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,7 @@ export interface ServicePageLayoutProps {
   ctaTitle: string;
   ctaBody: string;
   related: RelatedService[];
-  extraContent?: React.ReactNode;
+  extraContent?: ReactNode;
 }
 
 export function ServicePageLayout(props: ServicePageLayoutProps) {
