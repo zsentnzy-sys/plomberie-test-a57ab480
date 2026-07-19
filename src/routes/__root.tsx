@@ -255,8 +255,8 @@ function RootComponent() {
           <Outlet />
         </main>
 
-        <Footer />
-        {/*<MobileCallBar />*/}
+        {/*<Footer />*/}
+        <MobileCallBar />
       </div>
 
       <Toaster richColors position="top-center" />
