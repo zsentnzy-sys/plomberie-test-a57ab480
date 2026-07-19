@@ -5,9 +5,13 @@ import { site, services } from "@/lib/site";
 
 export function Footer() {
   return (
-    <footer className="relative border-t border-primary-foreground/5 bg-primary text-primary-foreground">
+    <footer className="relative isolate overflow-hidden border-t border-primary-foreground/5 bg-primary text-primary-foreground">
       {/* Subtile lueur d'ambiance en arrière-plan */}
-      <div className="absolute bottom-0 right-0 -z-10 h-72 w-72 bg-accent/5 blur-[120px]" />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0" style={{
+        background:
+        "radial-gradient(circle at 100% 100%, rgba(0, 178, 169, 0.14) 0%, rgba(0, 178, 169, 0) 38rem)",
+      }}
+      />
 
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
         <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-4">
@@ -23,7 +27,7 @@ export function Footer() {
             </div>
             
             {/* Badge d'assurance : Gros point fort pour rassurer un client */}
-            <div className="inline-flex max-w-xs items-center gap-2.5 rounded-lg border border-primary-foreground/10 bg-primary-foreground/5 p-3 text-xs text-primary-foreground/80 backdrop-blur-sm">
+            <div className="inline-flex max-w-xs items-center gap-2.5 rounded-lg border border-primary-foreground/10 bg-primary-foreground/5 p-3 text-xs text-primary-foreground/80">
               <ShieldCheck className="h-5 w-5 shrink-0 text-accent" />
               <span>Garantie décennale & Responsabilité Civile Professionnelle</span>
             </div>
