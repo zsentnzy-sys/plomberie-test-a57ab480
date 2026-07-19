@@ -22,6 +22,10 @@ import { Route as AProposRouteImport } from './routes/a-propos'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as ServicesSanitaireRouteImport } from './routes/services.sanitaire'
+import { Route as ServicesDepannageRouteImport } from './routes/services.depannage'
+import { Route as ServicesDebouchageRouteImport } from './routes/services.debouchage'
+import { Route as ServicesChauffageRouteImport } from './routes/services.chauffage'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as AdminResetPasswordRouteImport } from './routes/admin/reset-password'
 import { Route as AdminRendezVousRouteImport } from './routes/admin/rendez-vous'
@@ -101,6 +105,26 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const ServicesSanitaireRoute = ServicesSanitaireRouteImport.update({
+  id: '/sanitaire',
+  path: '/sanitaire',
+  getParentRoute: () => ServicesRoute,
+} as any)
+const ServicesDepannageRoute = ServicesDepannageRouteImport.update({
+  id: '/depannage',
+  path: '/depannage',
+  getParentRoute: () => ServicesRoute,
+} as any)
+const ServicesDebouchageRoute = ServicesDebouchageRouteImport.update({
+  id: '/debouchage',
+  path: '/debouchage',
+  getParentRoute: () => ServicesRoute,
+} as any)
+const ServicesChauffageRoute = ServicesChauffageRouteImport.update({
+  id: '/chauffage',
+  path: '/chauffage',
+  getParentRoute: () => ServicesRoute,
+} as any)
 const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
   id: '/email/unsubscribe',
   path: '/email/unsubscribe',
@@ -175,7 +199,7 @@ export interface FileRoutesByFullPath {
   '/mentions-legales': typeof MentionsLegalesRoute
   '/politique-de-confidentialite': typeof PolitiqueDeConfidentialiteRoute
   '/rendez-vous': typeof RendezVousRoute
-  '/services': typeof ServicesRoute
+  '/services': typeof ServicesRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/admin/devis': typeof AdminDevisRoute
@@ -185,6 +209,10 @@ export interface FileRoutesByFullPath {
   '/admin/rendez-vous': typeof AdminRendezVousRoute
   '/admin/reset-password': typeof AdminResetPasswordRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/services/chauffage': typeof ServicesChauffageRoute
+  '/services/debouchage': typeof ServicesDebouchageRoute
+  '/services/depannage': typeof ServicesDepannageRoute
+  '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin/': typeof AdminIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -201,7 +229,7 @@ export interface FileRoutesByTo {
   '/mentions-legales': typeof MentionsLegalesRoute
   '/politique-de-confidentialite': typeof PolitiqueDeConfidentialiteRoute
   '/rendez-vous': typeof RendezVousRoute
-  '/services': typeof ServicesRoute
+  '/services': typeof ServicesRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/admin/devis': typeof AdminDevisRoute
@@ -211,6 +239,10 @@ export interface FileRoutesByTo {
   '/admin/rendez-vous': typeof AdminRendezVousRoute
   '/admin/reset-password': typeof AdminResetPasswordRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/services/chauffage': typeof ServicesChauffageRoute
+  '/services/debouchage': typeof ServicesDebouchageRoute
+  '/services/depannage': typeof ServicesDepannageRoute
+  '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin': typeof AdminIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -229,7 +261,7 @@ export interface FileRoutesById {
   '/mentions-legales': typeof MentionsLegalesRoute
   '/politique-de-confidentialite': typeof PolitiqueDeConfidentialiteRoute
   '/rendez-vous': typeof RendezVousRoute
-  '/services': typeof ServicesRoute
+  '/services': typeof ServicesRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/admin/devis': typeof AdminDevisRoute
@@ -239,6 +271,10 @@ export interface FileRoutesById {
   '/admin/rendez-vous': typeof AdminRendezVousRoute
   '/admin/reset-password': typeof AdminResetPasswordRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/services/chauffage': typeof ServicesChauffageRoute
+  '/services/debouchage': typeof ServicesDebouchageRoute
+  '/services/depannage': typeof ServicesDepannageRoute
+  '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin/': typeof AdminIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -268,6 +304,10 @@ export interface FileRouteTypes {
     | '/admin/rendez-vous'
     | '/admin/reset-password'
     | '/email/unsubscribe'
+    | '/services/chauffage'
+    | '/services/debouchage'
+    | '/services/depannage'
+    | '/services/sanitaire'
     | '/admin/'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
@@ -294,6 +334,10 @@ export interface FileRouteTypes {
     | '/admin/rendez-vous'
     | '/admin/reset-password'
     | '/email/unsubscribe'
+    | '/services/chauffage'
+    | '/services/debouchage'
+    | '/services/depannage'
+    | '/services/sanitaire'
     | '/admin'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
@@ -321,6 +365,10 @@ export interface FileRouteTypes {
     | '/admin/rendez-vous'
     | '/admin/reset-password'
     | '/email/unsubscribe'
+    | '/services/chauffage'
+    | '/services/debouchage'
+    | '/services/depannage'
+    | '/services/sanitaire'
     | '/admin/'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
@@ -339,7 +387,7 @@ export interface RootRouteChildren {
   MentionsLegalesRoute: typeof MentionsLegalesRoute
   PolitiqueDeConfidentialiteRoute: typeof PolitiqueDeConfidentialiteRoute
   RendezVousRoute: typeof RendezVousRoute
-  ServicesRoute: typeof ServicesRoute
+  ServicesRoute: typeof ServicesRouteWithChildren
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
@@ -442,6 +490,34 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRouteRoute
+    }
+    '/services/sanitaire': {
+      id: '/services/sanitaire'
+      path: '/sanitaire'
+      fullPath: '/services/sanitaire'
+      preLoaderRoute: typeof ServicesSanitaireRouteImport
+      parentRoute: typeof ServicesRoute
+    }
+    '/services/depannage': {
+      id: '/services/depannage'
+      path: '/depannage'
+      fullPath: '/services/depannage'
+      preLoaderRoute: typeof ServicesDepannageRouteImport
+      parentRoute: typeof ServicesRoute
+    }
+    '/services/debouchage': {
+      id: '/services/debouchage'
+      path: '/debouchage'
+      fullPath: '/services/debouchage'
+      preLoaderRoute: typeof ServicesDebouchageRouteImport
+      parentRoute: typeof ServicesRoute
+    }
+    '/services/chauffage': {
+      id: '/services/chauffage'
+      path: '/chauffage'
+      fullPath: '/services/chauffage'
+      preLoaderRoute: typeof ServicesChauffageRouteImport
+      parentRoute: typeof ServicesRoute
     }
     '/email/unsubscribe': {
       id: '/email/unsubscribe'
@@ -554,6 +630,24 @@ const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
   AdminRouteRouteChildren,
 )
 
+interface ServicesRouteChildren {
+  ServicesChauffageRoute: typeof ServicesChauffageRoute
+  ServicesDebouchageRoute: typeof ServicesDebouchageRoute
+  ServicesDepannageRoute: typeof ServicesDepannageRoute
+  ServicesSanitaireRoute: typeof ServicesSanitaireRoute
+}
+
+const ServicesRouteChildren: ServicesRouteChildren = {
+  ServicesChauffageRoute: ServicesChauffageRoute,
+  ServicesDebouchageRoute: ServicesDebouchageRoute,
+  ServicesDepannageRoute: ServicesDepannageRoute,
+  ServicesSanitaireRoute: ServicesSanitaireRoute,
+}
+
+const ServicesRouteWithChildren = ServicesRoute._addFileChildren(
+  ServicesRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRouteRoute: AdminRouteRouteWithChildren,
@@ -564,7 +658,7 @@ const rootRouteChildren: RootRouteChildren = {
   MentionsLegalesRoute: MentionsLegalesRoute,
   PolitiqueDeConfidentialiteRoute: PolitiqueDeConfidentialiteRoute,
   RendezVousRoute: RendezVousRoute,
-  ServicesRoute: ServicesRoute,
+  ServicesRoute: ServicesRouteWithChildren,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   UnsubscribeRoute: UnsubscribeRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
@@ -577,13 +671,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

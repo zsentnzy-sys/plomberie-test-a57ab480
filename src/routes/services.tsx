@@ -52,6 +52,13 @@ export const Route = createFileRoute("/services")({
 
 const iconMap = { Wrench, Flame, ShowerHead, Droplets } as const;
 
+const slugToRoute = {
+  depannage: "/services/depannage",
+  chauffage: "/services/chauffage",
+  sanitaire: "/services/sanitaire",
+  debouchage: "/services/debouchage",
+} as const;
+
 function ServicesPage() {
   return (
     <>
@@ -65,12 +72,20 @@ function ServicesPage() {
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {services.map((s) => {
             const Icon = iconMap[s.icon as keyof typeof iconMap];
+            const to = slugToRoute[s.slug as keyof typeof slugToRoute];
             return (
-              <div key={s.slug} className="rounded-2xl border border-border bg-card p-6 shadow-soft">
+              <Link
+                key={s.slug}
+                to={to}
+                className="group flex flex-col rounded-2xl border border-border bg-card p-6 shadow-soft transition-colors hover:border-accent"
+              >
                 <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10 text-accent"><Icon className="h-6 w-6" /></span>
-                <h2 className="mt-4 text-lg font-semibold">{s.title}</h2>
-                <p className="mt-2 text-sm text-muted-foreground">{s.desc}</p>
-              </div>
+                <h2 className="mt-4 text-lg font-semibold group-hover:text-accent">{s.title}</h2>
+                <p className="mt-2 flex-1 text-sm text-muted-foreground">{s.desc}</p>
+                <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-accent">
+                  Découvrir {s.title.toLowerCase()} <ArrowRight className="h-3.5 w-3.5" />
+                </span>
+              </Link>
             );
           })}
         </div>
