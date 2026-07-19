@@ -1,4 +1,4 @@
-import heroImg from "@/assets/hero-plumber.webp";
+import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/test-image")({
   component: TestImage,
@@ -6,12 +6,15 @@ export const Route = createFileRoute("/test-image")({
 
 function TestImage() {
   return (
-    <img
-      src={heroImg}
-      alt=""
-      width={1280}
-      height={853}
-      className="block h-auto w-full"
-    />
+    <div
+      style={{
+        padding: "40px",
+        fontFamily: "system-ui",
+        background: "white",
+        color: "black",
+      }}
+    >
+      Test minimal
+    </div>
   );
 }
