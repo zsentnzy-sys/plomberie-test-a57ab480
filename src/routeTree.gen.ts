@@ -22,6 +22,7 @@ import { Route as AProposRouteImport } from './routes/a-propos'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as ServicesSanitaireRouteImport } from './routes/services.sanitaire'
 import { Route as ServicesDepannageRouteImport } from './routes/services.depannage'
 import { Route as ServicesChauffageRouteImport } from './routes/services.chauffage'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
@@ -102,6 +103,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AdminRouteRoute,
+} as any)
+const ServicesSanitaireRoute = ServicesSanitaireRouteImport.update({
+  id: '/sanitaire',
+  path: '/sanitaire',
+  getParentRoute: () => ServicesRoute,
 } as any)
 const ServicesDepannageRoute = ServicesDepannageRouteImport.update({
   id: '/depannage',
@@ -199,6 +205,7 @@ export interface FileRoutesByFullPath {
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/services/chauffage': typeof ServicesChauffageRoute
   '/services/depannage': typeof ServicesDepannageRoute
+  '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin/': typeof AdminIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -227,6 +234,7 @@ export interface FileRoutesByTo {
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/services/chauffage': typeof ServicesChauffageRoute
   '/services/depannage': typeof ServicesDepannageRoute
+  '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin': typeof AdminIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -257,6 +265,7 @@ export interface FileRoutesById {
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/services/chauffage': typeof ServicesChauffageRoute
   '/services/depannage': typeof ServicesDepannageRoute
+  '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin/': typeof AdminIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -288,6 +297,7 @@ export interface FileRouteTypes {
     | '/email/unsubscribe'
     | '/services/chauffage'
     | '/services/depannage'
+    | '/services/sanitaire'
     | '/admin/'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
@@ -316,6 +326,7 @@ export interface FileRouteTypes {
     | '/email/unsubscribe'
     | '/services/chauffage'
     | '/services/depannage'
+    | '/services/sanitaire'
     | '/admin'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
@@ -345,6 +356,7 @@ export interface FileRouteTypes {
     | '/email/unsubscribe'
     | '/services/chauffage'
     | '/services/depannage'
+    | '/services/sanitaire'
     | '/admin/'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
@@ -466,6 +478,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRouteRoute
+    }
+    '/services/sanitaire': {
+      id: '/services/sanitaire'
+      path: '/sanitaire'
+      fullPath: '/services/sanitaire'
+      preLoaderRoute: typeof ServicesSanitaireRouteImport
+      parentRoute: typeof ServicesRoute
     }
     '/services/depannage': {
       id: '/services/depannage'
@@ -595,11 +614,13 @@ const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
 interface ServicesRouteChildren {
   ServicesChauffageRoute: typeof ServicesChauffageRoute
   ServicesDepannageRoute: typeof ServicesDepannageRoute
+  ServicesSanitaireRoute: typeof ServicesSanitaireRoute
 }
 
 const ServicesRouteChildren: ServicesRouteChildren = {
   ServicesChauffageRoute: ServicesChauffageRoute,
   ServicesDepannageRoute: ServicesDepannageRoute,
+  ServicesSanitaireRoute: ServicesSanitaireRoute,
 }
 
 const ServicesRouteWithChildren = ServicesRoute._addFileChildren(
