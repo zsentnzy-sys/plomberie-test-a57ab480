@@ -10,7 +10,6 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
-import { Route as TestRouteImport } from './routes/test'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as RendezVousRouteImport } from './routes/rendez-vous'
@@ -39,11 +38,6 @@ import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/e
 const UnsubscribeRoute = UnsubscribeRouteImport.update({
   id: '/unsubscribe',
   path: '/unsubscribe',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const TestRoute = TestRouteImport.update({
-  id: '/test',
-  path: '/test',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -183,7 +177,6 @@ export interface FileRoutesByFullPath {
   '/rendez-vous': typeof RendezVousRoute
   '/services': typeof ServicesRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/test': typeof TestRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/admin/devis': typeof AdminDevisRoute
   '/admin/login': typeof AdminLoginRoute
@@ -210,7 +203,6 @@ export interface FileRoutesByTo {
   '/rendez-vous': typeof RendezVousRoute
   '/services': typeof ServicesRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/test': typeof TestRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/admin/devis': typeof AdminDevisRoute
   '/admin/login': typeof AdminLoginRoute
@@ -239,7 +231,6 @@ export interface FileRoutesById {
   '/rendez-vous': typeof RendezVousRoute
   '/services': typeof ServicesRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
-  '/test': typeof TestRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/admin/devis': typeof AdminDevisRoute
   '/admin/login': typeof AdminLoginRoute
@@ -269,7 +260,6 @@ export interface FileRouteTypes {
     | '/rendez-vous'
     | '/services'
     | '/sitemap.xml'
-    | '/test'
     | '/unsubscribe'
     | '/admin/devis'
     | '/admin/login'
@@ -296,7 +286,6 @@ export interface FileRouteTypes {
     | '/rendez-vous'
     | '/services'
     | '/sitemap.xml'
-    | '/test'
     | '/unsubscribe'
     | '/admin/devis'
     | '/admin/login'
@@ -324,7 +313,6 @@ export interface FileRouteTypes {
     | '/rendez-vous'
     | '/services'
     | '/sitemap.xml'
-    | '/test'
     | '/unsubscribe'
     | '/admin/devis'
     | '/admin/login'
@@ -353,7 +341,6 @@ export interface RootRouteChildren {
   RendezVousRoute: typeof RendezVousRoute
   ServicesRoute: typeof ServicesRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
-  TestRoute: typeof TestRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
   ApiAttachmentsUploadRoute: typeof ApiAttachmentsUploadRoute
@@ -370,13 +357,6 @@ declare module '@tanstack/react-router' {
       path: '/unsubscribe'
       fullPath: '/unsubscribe'
       preLoaderRoute: typeof UnsubscribeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/test': {
-      id: '/test'
-      path: '/test'
-      fullPath: '/test'
-      preLoaderRoute: typeof TestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sitemap.xml': {
@@ -586,7 +566,6 @@ const rootRouteChildren: RootRouteChildren = {
   RendezVousRoute: RendezVousRoute,
   ServicesRoute: ServicesRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
-  TestRoute: TestRoute,
   UnsubscribeRoute: UnsubscribeRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
   ApiAttachmentsUploadRoute: ApiAttachmentsUploadRoute,
