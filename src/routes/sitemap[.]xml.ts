@@ -20,6 +20,10 @@ export const Route = createFileRoute("/sitemap.xml")({
         const entries: SitemapEntry[] = [
           { path: "/", lastmod: today },
           { path: "/services", lastmod: today },
+          { path: "/services/depannage", lastmod: today },
+          { path: "/services/chauffage", lastmod: today },
+          { path: "/services/sanitaire", lastmod: today },
+          { path: "/services/debouchage", lastmod: today },
           { path: "/devis", lastmod: today },
           { path: "/rendez-vous", lastmod: today },
           { path: "/a-propos", lastmod: today },
