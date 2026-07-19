@@ -23,6 +23,7 @@ import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as ServicesDepannageRouteImport } from './routes/services.depannage'
+import { Route as ServicesChauffageRouteImport } from './routes/services.chauffage'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as AdminResetPasswordRouteImport } from './routes/admin/reset-password'
 import { Route as AdminRendezVousRouteImport } from './routes/admin/rendez-vous'
@@ -105,6 +106,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const ServicesDepannageRoute = ServicesDepannageRouteImport.update({
   id: '/depannage',
   path: '/depannage',
+  getParentRoute: () => ServicesRoute,
+} as any)
+const ServicesChauffageRoute = ServicesChauffageRouteImport.update({
+  id: '/chauffage',
+  path: '/chauffage',
   getParentRoute: () => ServicesRoute,
 } as any)
 const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
@@ -191,6 +197,7 @@ export interface FileRoutesByFullPath {
   '/admin/rendez-vous': typeof AdminRendezVousRoute
   '/admin/reset-password': typeof AdminResetPasswordRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/services/chauffage': typeof ServicesChauffageRoute
   '/services/depannage': typeof ServicesDepannageRoute
   '/admin/': typeof AdminIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
@@ -218,6 +225,7 @@ export interface FileRoutesByTo {
   '/admin/rendez-vous': typeof AdminRendezVousRoute
   '/admin/reset-password': typeof AdminResetPasswordRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/services/chauffage': typeof ServicesChauffageRoute
   '/services/depannage': typeof ServicesDepannageRoute
   '/admin': typeof AdminIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
@@ -247,6 +255,7 @@ export interface FileRoutesById {
   '/admin/rendez-vous': typeof AdminRendezVousRoute
   '/admin/reset-password': typeof AdminResetPasswordRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/services/chauffage': typeof ServicesChauffageRoute
   '/services/depannage': typeof ServicesDepannageRoute
   '/admin/': typeof AdminIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
@@ -277,6 +286,7 @@ export interface FileRouteTypes {
     | '/admin/rendez-vous'
     | '/admin/reset-password'
     | '/email/unsubscribe'
+    | '/services/chauffage'
     | '/services/depannage'
     | '/admin/'
     | '/api/attachments/upload'
@@ -304,6 +314,7 @@ export interface FileRouteTypes {
     | '/admin/rendez-vous'
     | '/admin/reset-password'
     | '/email/unsubscribe'
+    | '/services/chauffage'
     | '/services/depannage'
     | '/admin'
     | '/api/attachments/upload'
@@ -332,6 +343,7 @@ export interface FileRouteTypes {
     | '/admin/rendez-vous'
     | '/admin/reset-password'
     | '/email/unsubscribe'
+    | '/services/chauffage'
     | '/services/depannage'
     | '/admin/'
     | '/api/attachments/upload'
@@ -462,6 +474,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServicesDepannageRouteImport
       parentRoute: typeof ServicesRoute
     }
+    '/services/chauffage': {
+      id: '/services/chauffage'
+      path: '/chauffage'
+      fullPath: '/services/chauffage'
+      preLoaderRoute: typeof ServicesChauffageRouteImport
+      parentRoute: typeof ServicesRoute
+    }
     '/email/unsubscribe': {
       id: '/email/unsubscribe'
       path: '/email/unsubscribe'
@@ -574,10 +593,12 @@ const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
 )
 
 interface ServicesRouteChildren {
+  ServicesChauffageRoute: typeof ServicesChauffageRoute
   ServicesDepannageRoute: typeof ServicesDepannageRoute
 }
 
 const ServicesRouteChildren: ServicesRouteChildren = {
+  ServicesChauffageRoute: ServicesChauffageRoute,
   ServicesDepannageRoute: ServicesDepannageRoute,
 }
 
