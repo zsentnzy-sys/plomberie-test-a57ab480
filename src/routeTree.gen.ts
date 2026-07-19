@@ -24,6 +24,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as ServicesSanitaireRouteImport } from './routes/services.sanitaire'
 import { Route as ServicesDepannageRouteImport } from './routes/services.depannage'
+import { Route as ServicesDebouchageRouteImport } from './routes/services.debouchage'
 import { Route as ServicesChauffageRouteImport } from './routes/services.chauffage'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as AdminResetPasswordRouteImport } from './routes/admin/reset-password'
@@ -112,6 +113,11 @@ const ServicesSanitaireRoute = ServicesSanitaireRouteImport.update({
 const ServicesDepannageRoute = ServicesDepannageRouteImport.update({
   id: '/depannage',
   path: '/depannage',
+  getParentRoute: () => ServicesRoute,
+} as any)
+const ServicesDebouchageRoute = ServicesDebouchageRouteImport.update({
+  id: '/debouchage',
+  path: '/debouchage',
   getParentRoute: () => ServicesRoute,
 } as any)
 const ServicesChauffageRoute = ServicesChauffageRouteImport.update({
@@ -204,6 +210,7 @@ export interface FileRoutesByFullPath {
   '/admin/reset-password': typeof AdminResetPasswordRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/services/chauffage': typeof ServicesChauffageRoute
+  '/services/debouchage': typeof ServicesDebouchageRoute
   '/services/depannage': typeof ServicesDepannageRoute
   '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin/': typeof AdminIndexRoute
@@ -233,6 +240,7 @@ export interface FileRoutesByTo {
   '/admin/reset-password': typeof AdminResetPasswordRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/services/chauffage': typeof ServicesChauffageRoute
+  '/services/debouchage': typeof ServicesDebouchageRoute
   '/services/depannage': typeof ServicesDepannageRoute
   '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin': typeof AdminIndexRoute
@@ -264,6 +272,7 @@ export interface FileRoutesById {
   '/admin/reset-password': typeof AdminResetPasswordRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
   '/services/chauffage': typeof ServicesChauffageRoute
+  '/services/debouchage': typeof ServicesDebouchageRoute
   '/services/depannage': typeof ServicesDepannageRoute
   '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin/': typeof AdminIndexRoute
@@ -296,6 +305,7 @@ export interface FileRouteTypes {
     | '/admin/reset-password'
     | '/email/unsubscribe'
     | '/services/chauffage'
+    | '/services/debouchage'
     | '/services/depannage'
     | '/services/sanitaire'
     | '/admin/'
@@ -325,6 +335,7 @@ export interface FileRouteTypes {
     | '/admin/reset-password'
     | '/email/unsubscribe'
     | '/services/chauffage'
+    | '/services/debouchage'
     | '/services/depannage'
     | '/services/sanitaire'
     | '/admin'
@@ -355,6 +366,7 @@ export interface FileRouteTypes {
     | '/admin/reset-password'
     | '/email/unsubscribe'
     | '/services/chauffage'
+    | '/services/debouchage'
     | '/services/depannage'
     | '/services/sanitaire'
     | '/admin/'
@@ -493,6 +505,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServicesDepannageRouteImport
       parentRoute: typeof ServicesRoute
     }
+    '/services/debouchage': {
+      id: '/services/debouchage'
+      path: '/debouchage'
+      fullPath: '/services/debouchage'
+      preLoaderRoute: typeof ServicesDebouchageRouteImport
+      parentRoute: typeof ServicesRoute
+    }
     '/services/chauffage': {
       id: '/services/chauffage'
       path: '/chauffage'
@@ -613,12 +632,14 @@ const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
 
 interface ServicesRouteChildren {
   ServicesChauffageRoute: typeof ServicesChauffageRoute
+  ServicesDebouchageRoute: typeof ServicesDebouchageRoute
   ServicesDepannageRoute: typeof ServicesDepannageRoute
   ServicesSanitaireRoute: typeof ServicesSanitaireRoute
 }
 
 const ServicesRouteChildren: ServicesRouteChildren = {
   ServicesChauffageRoute: ServicesChauffageRoute,
+  ServicesDebouchageRoute: ServicesDebouchageRoute,
   ServicesDepannageRoute: ServicesDepannageRoute,
   ServicesSanitaireRoute: ServicesSanitaireRoute,
 }
