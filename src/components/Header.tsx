@@ -19,7 +19,7 @@ export function Header() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/70 bg-background/85 backdrop-blur-md">
+    <header className="relative z-50 w-full border-b border-border bg-background"></header>
       {/* La hauteur (h-16) est fixe. items-center force tout au centre de cet axe vertical */}
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         
