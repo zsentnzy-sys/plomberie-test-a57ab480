@@ -39,18 +39,26 @@ export function Footer() {
               Nos Services
             </h3>
             <ul className="mt-5 space-y-3 text-sm">
-              {services.map((s) => (
-                <li key={s.slug}>
-                  <Link 
-                    to="/services" 
-                    className="group flex items-center text-primary-foreground/70 transition-colors hover:text-accent"
-                  >
-                    <span className="transition-transform duration-200 group-hover:translate-x-1">
-                      {s.title}
-                    </span>
-                  </Link>
-                </li>
-              ))}
+              {services.map((s) => {
+                const to = ({
+                  depannage: "/services/depannage",
+                  chauffage: "/services/chauffage",
+                  sanitaire: "/services/sanitaire",
+                  debouchage: "/services/debouchage",
+                } as const)[s.slug as "depannage" | "chauffage" | "sanitaire" | "debouchage"];
+                return (
+                  <li key={s.slug}>
+                    <Link
+                      to={to}
+                      className="group flex items-center text-primary-foreground/70 transition-colors hover:text-accent"
+                    >
+                      <span className="transition-transform duration-200 group-hover:translate-x-1">
+                        {s.title}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </div>
 
