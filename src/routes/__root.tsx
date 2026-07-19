@@ -255,7 +255,7 @@ function RootComponent() {
           <Outlet />
         </main>
 
-        {/*<Footer />*/}
+        <Footer />
         <MobileCallBar />
       </div>
 
