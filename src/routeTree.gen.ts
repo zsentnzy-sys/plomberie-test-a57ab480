@@ -22,6 +22,7 @@ import { Route as AProposRouteImport } from './routes/a-propos'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as ServicesDepannageRouteImport } from './routes/services.depannage'
 import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
 import { Route as AdminResetPasswordRouteImport } from './routes/admin/reset-password'
 import { Route as AdminRendezVousRouteImport } from './routes/admin/rendez-vous'
@@ -101,6 +102,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const ServicesDepannageRoute = ServicesDepannageRouteImport.update({
+  id: '/depannage',
+  path: '/depannage',
+  getParentRoute: () => ServicesRoute,
+} as any)
 const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
   id: '/email/unsubscribe',
   path: '/email/unsubscribe',
@@ -175,7 +181,7 @@ export interface FileRoutesByFullPath {
   '/mentions-legales': typeof MentionsLegalesRoute
   '/politique-de-confidentialite': typeof PolitiqueDeConfidentialiteRoute
   '/rendez-vous': typeof RendezVousRoute
-  '/services': typeof ServicesRoute
+  '/services': typeof ServicesRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/admin/devis': typeof AdminDevisRoute
@@ -185,6 +191,7 @@ export interface FileRoutesByFullPath {
   '/admin/rendez-vous': typeof AdminRendezVousRoute
   '/admin/reset-password': typeof AdminResetPasswordRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/services/depannage': typeof ServicesDepannageRoute
   '/admin/': typeof AdminIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -201,7 +208,7 @@ export interface FileRoutesByTo {
   '/mentions-legales': typeof MentionsLegalesRoute
   '/politique-de-confidentialite': typeof PolitiqueDeConfidentialiteRoute
   '/rendez-vous': typeof RendezVousRoute
-  '/services': typeof ServicesRoute
+  '/services': typeof ServicesRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/admin/devis': typeof AdminDevisRoute
@@ -211,6 +218,7 @@ export interface FileRoutesByTo {
   '/admin/rendez-vous': typeof AdminRendezVousRoute
   '/admin/reset-password': typeof AdminResetPasswordRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/services/depannage': typeof ServicesDepannageRoute
   '/admin': typeof AdminIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -229,7 +237,7 @@ export interface FileRoutesById {
   '/mentions-legales': typeof MentionsLegalesRoute
   '/politique-de-confidentialite': typeof PolitiqueDeConfidentialiteRoute
   '/rendez-vous': typeof RendezVousRoute
-  '/services': typeof ServicesRoute
+  '/services': typeof ServicesRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/admin/devis': typeof AdminDevisRoute
@@ -239,6 +247,7 @@ export interface FileRoutesById {
   '/admin/rendez-vous': typeof AdminRendezVousRoute
   '/admin/reset-password': typeof AdminResetPasswordRoute
   '/email/unsubscribe': typeof EmailUnsubscribeRoute
+  '/services/depannage': typeof ServicesDepannageRoute
   '/admin/': typeof AdminIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
@@ -268,6 +277,7 @@ export interface FileRouteTypes {
     | '/admin/rendez-vous'
     | '/admin/reset-password'
     | '/email/unsubscribe'
+    | '/services/depannage'
     | '/admin/'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
@@ -294,6 +304,7 @@ export interface FileRouteTypes {
     | '/admin/rendez-vous'
     | '/admin/reset-password'
     | '/email/unsubscribe'
+    | '/services/depannage'
     | '/admin'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
@@ -321,6 +332,7 @@ export interface FileRouteTypes {
     | '/admin/rendez-vous'
     | '/admin/reset-password'
     | '/email/unsubscribe'
+    | '/services/depannage'
     | '/admin/'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
@@ -339,7 +351,7 @@ export interface RootRouteChildren {
   MentionsLegalesRoute: typeof MentionsLegalesRoute
   PolitiqueDeConfidentialiteRoute: typeof PolitiqueDeConfidentialiteRoute
   RendezVousRoute: typeof RendezVousRoute
-  ServicesRoute: typeof ServicesRoute
+  ServicesRoute: typeof ServicesRouteWithChildren
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
@@ -442,6 +454,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRouteRoute
+    }
+    '/services/depannage': {
+      id: '/services/depannage'
+      path: '/depannage'
+      fullPath: '/services/depannage'
+      preLoaderRoute: typeof ServicesDepannageRouteImport
+      parentRoute: typeof ServicesRoute
     }
     '/email/unsubscribe': {
       id: '/email/unsubscribe'
@@ -554,6 +573,18 @@ const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
   AdminRouteRouteChildren,
 )
 
+interface ServicesRouteChildren {
+  ServicesDepannageRoute: typeof ServicesDepannageRoute
+}
+
+const ServicesRouteChildren: ServicesRouteChildren = {
+  ServicesDepannageRoute: ServicesDepannageRoute,
+}
+
+const ServicesRouteWithChildren = ServicesRoute._addFileChildren(
+  ServicesRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRouteRoute: AdminRouteRouteWithChildren,
@@ -564,7 +595,7 @@ const rootRouteChildren: RootRouteChildren = {
   MentionsLegalesRoute: MentionsLegalesRoute,
   PolitiqueDeConfidentialiteRoute: PolitiqueDeConfidentialiteRoute,
   RendezVousRoute: RendezVousRoute,
-  ServicesRoute: ServicesRoute,
+  ServicesRoute: ServicesRouteWithChildren,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   UnsubscribeRoute: UnsubscribeRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
