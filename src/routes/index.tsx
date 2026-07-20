@@ -48,6 +48,13 @@ export const Route = createFileRoute("/")({
 
 const iconMap = { Wrench, Flame, ShowerHead, Droplets } as const;
 
+const serviceRoutes = {
+  depannage: "/services/depannage",
+  chauffage: "/services/chauffage",
+  sanitaire: "/services/sanitaire",
+  debouchage: "/services/debouchage",
+} as const;
+
 function Index() {
   return (
     <>
@@ -138,7 +145,7 @@ function Index() {
                 </span>
                 <h3 className="mt-4 text-lg font-semibold">{s.title}</h3>
                 <p className="mt-2 text-sm text-muted-foreground">{s.desc}</p>
-                <Link to="/services" className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-accent">
+                <Link to={serviceRoutes[s.slug as keyof typeof serviceRoutes]} className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-accent">
                   En savoir plus <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </Link>
               </div>
