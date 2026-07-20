@@ -21,6 +21,7 @@ import { Route as AvisRouteImport } from './routes/avis'
 import { Route as AProposRouteImport } from './routes/a-propos'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ServicesIndexRouteImport } from './routes/services.index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as ServicesSanitaireRouteImport } from './routes/services.sanitaire'
 import { Route as ServicesDepannageRouteImport } from './routes/services.depannage'
@@ -99,6 +100,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ServicesIndexRoute = ServicesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ServicesRoute,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
@@ -214,6 +220,7 @@ export interface FileRoutesByFullPath {
   '/services/depannage': typeof ServicesDepannageRoute
   '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin/': typeof AdminIndexRoute
+  '/services/': typeof ServicesIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -229,7 +236,6 @@ export interface FileRoutesByTo {
   '/mentions-legales': typeof MentionsLegalesRoute
   '/politique-de-confidentialite': typeof PolitiqueDeConfidentialiteRoute
   '/rendez-vous': typeof RendezVousRoute
-  '/services': typeof ServicesRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/admin/devis': typeof AdminDevisRoute
@@ -244,6 +250,7 @@ export interface FileRoutesByTo {
   '/services/depannage': typeof ServicesDepannageRoute
   '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin': typeof AdminIndexRoute
+  '/services': typeof ServicesIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -276,6 +283,7 @@ export interface FileRoutesById {
   '/services/depannage': typeof ServicesDepannageRoute
   '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin/': typeof AdminIndexRoute
+  '/services/': typeof ServicesIndexRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -309,6 +317,7 @@ export interface FileRouteTypes {
     | '/services/depannage'
     | '/services/sanitaire'
     | '/admin/'
+    | '/services/'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
     | '/lovable/email/queue/process'
@@ -324,7 +333,6 @@ export interface FileRouteTypes {
     | '/mentions-legales'
     | '/politique-de-confidentialite'
     | '/rendez-vous'
-    | '/services'
     | '/sitemap.xml'
     | '/unsubscribe'
     | '/admin/devis'
@@ -339,6 +347,7 @@ export interface FileRouteTypes {
     | '/services/depannage'
     | '/services/sanitaire'
     | '/admin'
+    | '/services'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
     | '/lovable/email/queue/process'
@@ -370,6 +379,7 @@ export interface FileRouteTypes {
     | '/services/depannage'
     | '/services/sanitaire'
     | '/admin/'
+    | '/services/'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
     | '/lovable/email/queue/process'
@@ -483,6 +493,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/services/': {
+      id: '/services/'
+      path: '/'
+      fullPath: '/services/'
+      preLoaderRoute: typeof ServicesIndexRouteImport
+      parentRoute: typeof ServicesRoute
     }
     '/admin/': {
       id: '/admin/'
@@ -635,6 +652,7 @@ interface ServicesRouteChildren {
   ServicesDebouchageRoute: typeof ServicesDebouchageRoute
   ServicesDepannageRoute: typeof ServicesDepannageRoute
   ServicesSanitaireRoute: typeof ServicesSanitaireRoute
+  ServicesIndexRoute: typeof ServicesIndexRoute
 }
 
 const ServicesRouteChildren: ServicesRouteChildren = {
@@ -642,6 +660,7 @@ const ServicesRouteChildren: ServicesRouteChildren = {
   ServicesDebouchageRoute: ServicesDebouchageRoute,
   ServicesDepannageRoute: ServicesDepannageRoute,
   ServicesSanitaireRoute: ServicesSanitaireRoute,
+  ServicesIndexRoute: ServicesIndexRoute,
 }
 
 const ServicesRouteWithChildren = ServicesRoute._addFileChildren(
@@ -671,13 +690,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
