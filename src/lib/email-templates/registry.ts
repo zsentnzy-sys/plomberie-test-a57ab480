@@ -23,6 +23,8 @@ import { template as appointmentNotification } from './appointment-notification'
 import { template as appointmentConfirmation } from './appointment-confirmation'
 import { template as quoteNotification } from './quote-notification'
 import { template as quoteConfirmation } from './quote-confirmation'
+import { template as invoiceClient } from './invoice-client'
+import { template as invoiceArtisan } from './invoice-artisan'
 
 export const TEMPLATES: Record<string, TemplateEntry> = {
   'contact-notification': contactNotification,
@@ -31,4 +33,6 @@ export const TEMPLATES: Record<string, TemplateEntry> = {
   'appointment-confirmation': appointmentConfirmation,
   'quote-notification': quoteNotification,
   'quote-confirmation': quoteConfirmation,
+  'invoice-client': invoiceClient,
+  'invoice-artisan': invoiceArtisan,
 }
