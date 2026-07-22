@@ -77,6 +77,9 @@ function FacturesPage() {
   );
   const [lines, setLines] = useState<Line[]>([newLine()]);
   const [submitting, setSubmitting] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() =>
+    crypto.randomUUID(),
+  );
 
   const submit = useServerFn(generateInvoice);
 
