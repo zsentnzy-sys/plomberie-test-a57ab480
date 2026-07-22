@@ -1,5 +1,5 @@
 // Server-only helpers for invoice PDF generation.
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
 
 export type InvoiceLineType = "Service" | "Matériel" | "Taux horaire";
 export type PaymentMethod =
