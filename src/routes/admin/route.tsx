@@ -7,7 +7,7 @@ import {
   useNavigate,
 } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, CalendarDays, FileText, Mail, LogOut, Settings } from "lucide-react";
+import { LayoutDashboard, CalendarDays, FileText, Mail, LogOut, Settings, Receipt } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { site } from "@/lib/site";
@@ -50,6 +50,7 @@ const navItems = [
   { title: "Vue d'ensemble", url: "/admin", icon: LayoutDashboard },
   { title: "Rendez-vous", url: "/admin/rendez-vous", icon: CalendarDays },
   { title: "Devis", url: "/admin/devis", icon: FileText },
+  { title: "Factures", url: "/admin/factures", icon: Receipt },
   { title: "Messages", url: "/admin/messages", icon: Mail },
   { title: "Paramètres", url: "/admin/parametres", icon: Settings },
 ] as const;
