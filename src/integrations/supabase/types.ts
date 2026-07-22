@@ -218,6 +218,125 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_lines: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          invoice_id: string
+          line_total_ht: number
+          line_total_ttc: number
+          position: number
+          quantity: number
+          tva: number
+          type: string
+          unit_price_ht: number
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          invoice_id: string
+          line_total_ht: number
+          line_total_ttc: number
+          position: number
+          quantity: number
+          tva: number
+          type: string
+          unit_price_ht: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          invoice_id?: string
+          line_total_ht?: number
+          line_total_ttc?: number
+          position?: number
+          quantity?: number
+          tva?: number
+          type?: string
+          unit_price_ht?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_lines_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          client_address: string
+          client_email: string
+          client_name: string
+          client_phone: string | null
+          created_at: string
+          created_by: string
+          email_artisan_error: string | null
+          email_artisan_status: string
+          email_client_error: string | null
+          email_client_status: string
+          id: string
+          idempotency_key: string
+          invoice_date: string
+          invoice_number: string
+          payment_method: string
+          pdf_storage_path: string
+          total_ht: number
+          total_ttc: number
+          total_tva: number
+          updated_at: string
+        }
+        Insert: {
+          client_address: string
+          client_email: string
+          client_name: string
+          client_phone?: string | null
+          created_at?: string
+          created_by: string
+          email_artisan_error?: string | null
+          email_artisan_status?: string
+          email_client_error?: string | null
+          email_client_status?: string
+          id?: string
+          idempotency_key: string
+          invoice_date: string
+          invoice_number: string
+          payment_method: string
+          pdf_storage_path: string
+          total_ht: number
+          total_ttc: number
+          total_tva: number
+          updated_at?: string
+        }
+        Update: {
+          client_address?: string
+          client_email?: string
+          client_name?: string
+          client_phone?: string | null
+          created_at?: string
+          created_by?: string
+          email_artisan_error?: string | null
+          email_artisan_status?: string
+          email_client_error?: string | null
+          email_client_status?: string
+          id?: string
+          idempotency_key?: string
+          invoice_date?: string
+          invoice_number?: string
+          payment_method?: string
+          pdf_storage_path?: string
+          total_ht?: number
+          total_ttc?: number
+          total_tva?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       quote_requests: {
         Row: {
           address: string | null
