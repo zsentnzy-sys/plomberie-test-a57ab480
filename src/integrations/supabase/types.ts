@@ -226,6 +226,7 @@ export type Database = {
           invoice_id: string
           line_total_ht: number
           line_total_ttc: number
+          line_total_tva: number
           position: number
           quantity: number
           tva: number
@@ -239,6 +240,7 @@ export type Database = {
           invoice_id: string
           line_total_ht: number
           line_total_ttc: number
+          line_total_tva: number
           position: number
           quantity: number
           tva: number
@@ -252,6 +254,7 @@ export type Database = {
           invoice_id?: string
           line_total_ht?: number
           line_total_ttc?: number
+          line_total_tva?: number
           position?: number
           quantity?: number
           tva?: number
@@ -270,6 +273,8 @@ export type Database = {
       }
       invoices: {
         Row: {
+          artisan_snapshot: Json
+          cancelled_at: string | null
           client_address: string
           client_email: string
           client_name: string
@@ -280,18 +285,23 @@ export type Database = {
           email_artisan_status: string
           email_client_error: string | null
           email_client_status: string
+          generation_error: string | null
           id: string
           idempotency_key: string
           invoice_date: string
           invoice_number: string
           payment_method: string
-          pdf_storage_path: string
+          pdf_storage_path: string | null
+          sent_at: string | null
+          status: Database["public"]["Enums"]["invoice_status"]
           total_ht: number
           total_ttc: number
           total_tva: number
           updated_at: string
         }
         Insert: {
+          artisan_snapshot: Json
+          cancelled_at?: string | null
           client_address: string
           client_email: string
           client_name: string
@@ -302,18 +312,23 @@ export type Database = {
           email_artisan_status?: string
           email_client_error?: string | null
           email_client_status?: string
+          generation_error?: string | null
           id?: string
           idempotency_key: string
           invoice_date: string
           invoice_number: string
           payment_method: string
-          pdf_storage_path: string
+          pdf_storage_path?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["invoice_status"]
           total_ht: number
           total_ttc: number
           total_tva: number
           updated_at?: string
         }
         Update: {
+          artisan_snapshot?: Json
+          cancelled_at?: string | null
           client_address?: string
           client_email?: string
           client_name?: string
@@ -324,12 +339,15 @@ export type Database = {
           email_artisan_status?: string
           email_client_error?: string | null
           email_client_status?: string
+          generation_error?: string | null
           id?: string
           idempotency_key?: string
           invoice_date?: string
           invoice_number?: string
           payment_method?: string
-          pdf_storage_path?: string
+          pdf_storage_path?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["invoice_status"]
           total_ht?: number
           total_ttc?: number
           total_tva?: number
@@ -459,6 +477,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_invoice_for_idempotency: {
+        Args: {
+          _artisan_snapshot: Json
+          _client_address: string
+          _client_email: string
+          _client_name: string
+          _client_phone: string
+          _idempotency_key: string
+          _invoice_date: string
+          _payment_method: string
+          _total_ht: number
+          _total_ttc: number
+          _total_tva: number
+        }
+        Returns: {
+          invoice_id: string
+          invoice_number: string
+          reused: boolean
+        }[]
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -496,6 +534,15 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "user"
+      invoice_status:
+        | "generating"
+        | "generation_failed"
+        | "ready"
+        | "sending"
+        | "sent"
+        | "partially_sent"
+        | "send_failed"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -624,6 +671,16 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user"],
+      invoice_status: [
+        "generating",
+        "generation_failed",
+        "ready",
+        "sending",
+        "sent",
+        "partially_sent",
+        "send_failed",
+        "cancelled",
+      ],
     },
   },
 } as const
