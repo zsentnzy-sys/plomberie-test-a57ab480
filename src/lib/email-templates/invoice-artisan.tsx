@@ -1,7 +1,7 @@
 import React from 'react'
-import { Button, Text } from '@react-email/components'
+import { Text } from '@react-email/components'
 import type { TemplateEntry } from './registry'
-import { COLORS, DetailTable, EmailLayout, h2, paragraph } from './_brand'
+import { DetailTable, EmailLayout, h2, paragraph } from './_brand'
 
 interface Props {
   invoiceNumber?: string
@@ -14,7 +14,6 @@ interface Props {
   totalHT?: string
   totalTVA?: string
   totalTTC?: string
-  pdfUrl?: string
 }
 
 const Email = (p: Props) => (
@@ -38,24 +37,9 @@ const Email = (p: Props) => (
         { label: 'Total TTC', value: p.totalTTC },
       ]}
     />
-    {p.pdfUrl ? (
-      <Button
-        href={p.pdfUrl}
-        style={{
-          backgroundColor: COLORS.navy,
-          color: '#ffffff',
-          padding: '12px 22px',
-          borderRadius: '10px',
-          fontWeight: 700,
-          textDecoration: 'none',
-          fontSize: '14px',
-          marginTop: '18px',
-          display: 'inline-block',
-        }}
-      >
-        Télécharger le PDF
-      </Button>
-    ) : null}
+    <Text style={{ ...paragraph, marginTop: '18px' }}>
+      Le PDF de la facture est joint à cet e-mail.
+    </Text>
   </EmailLayout>
 )
 
@@ -75,7 +59,6 @@ export const template = {
     totalHT: '300,00 EUR',
     totalTVA: '60,00 EUR',
     totalTTC: '360,00 EUR',
-    pdfUrl: 'https://example.com/facture.pdf',
   },
 } satisfies TemplateEntry
 
