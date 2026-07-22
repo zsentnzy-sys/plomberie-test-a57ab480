@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Json } from "@/integrations/supabase/types";
 
 const lineSchema = z.object({
   type: z.enum(["Service", "Matériel", "Taux horaire"]),
@@ -111,7 +112,7 @@ export const generateInvoice = createServerFn({ method: "POST" })
         _total_ht: totals.totalHT,
         _total_tva: totals.totalTVA,
         _total_ttc: totals.totalTTC,
-        _artisan_snapshot: artisanSnapshot as unknown as import("@/integrations/supabase/types").Json,
+        _artisan_snapshot: artisanSnapshot as unknown as Json,
       },
     );
     if (rpcErr || !rpcRows || rpcRows.length === 0) {
