@@ -73,67 +73,71 @@ export const generateInvoice = createServerFn({ method: "POST" })
       totals,
     });
 
-    // Upload PDF to storage for signed link (7d). Bucket already private.
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const path = `invoices/${invoiceNumber}/${crypto.randomUUID()}.pdf`;
-    const { error: upErr } = await supabaseAdmin.storage
-      .from("request-attachments")
-      .upload(path, pdfBytes, {
-        contentType: "application/pdf",
-        upsert: false,
-      });
-    if (upErr) throw new Error(`Upload PDF échoué : ${upErr.message}`);
-
-    const { data: signed, error: signErr } = await supabaseAdmin.storage
-      .from("request-attachments")
-      .createSignedUrl(path, 60 * 60 * 24 * 7);
-    if (signErr || !signed) throw new Error("Génération du lien signé échouée.");
-
-    // Send emails (client + artisan)
-    const { enqueueTransactionalEmail, OWNER_EMAIL } = await import(
-      "@/lib/email/dispatch.server"
-    );
-
-    const commonData = {
-      invoiceNumber,
-      invoiceDate: formatDateFR(data.invoice_date),
-      totalHT: formatEUR(totals.totalHT),
-      totalTVA: formatEUR(totals.totalTVA),
-      totalTTC: formatEUR(totals.totalTTC),
-      pdfUrl: signed.signedUrl,
-    };
-
-    await enqueueTransactionalEmail({
-      templateName: "invoice-client",
-      recipientEmail: data.client_email,
-      idempotencyKey: `invoice-client-${invoiceNumber}`,
-      templateData: {
-        ...commonData,
-        clientName: data.client_name,
-      },
-      replyTo: data.artisan.email,
-    });
-
-    await enqueueTransactionalEmail({
-      templateName: "invoice-artisan",
-      recipientEmail: OWNER_EMAIL,
-      idempotencyKey: `invoice-artisan-${invoiceNumber}`,
-      templateData: {
-        ...commonData,
-        clientName: data.client_name,
-        clientEmail: data.client_email,
-        clientPhone: data.client_phone || undefined,
-        clientAddress: data.client_address,
-        paymentMethod: data.payment_method,
-      },
-    });
-
-    // Base64 for immediate download in the admin UI
+    // Encode PDF as base64 (used for both Resend attachments and browser download).
     let binary = "";
     for (let i = 0; i < pdfBytes.length; i++) {
       binary += String.fromCharCode(pdfBytes[i]);
     }
     const pdfBase64 = btoa(binary);
+    const pdfFilename = `${invoiceNumber}.pdf`;
+
+    // Render both emails to HTML server-side, then send via Resend with the
+    // PDF attached. We bypass the queued pipeline here because it doesn't
+    // support attachments.
+    const [{ render }, ClientEmailMod, ArtisanEmailMod, { sendInvoiceEmail }, { OWNER_EMAIL }] =
+      await Promise.all([
+        import("@react-email/components"),
+        import("@/lib/email-templates/invoice-client"),
+        import("@/lib/email-templates/invoice-artisan"),
+        import("@/lib/invoice-email.server"),
+        import("@/lib/email/dispatch.server"),
+      ]);
+    const ClientEmail = ClientEmailMod.default;
+    const ArtisanEmail = ArtisanEmailMod.default;
+
+    const commonView = {
+      invoiceNumber: invoiceNumber as string,
+      invoiceDate: formatDateFR(data.invoice_date),
+      totalHT: formatEUR(totals.totalHT),
+      totalTVA: formatEUR(totals.totalTVA),
+      totalTTC: formatEUR(totals.totalTTC),
+    };
+
+    const [clientHtml, artisanHtml] = await Promise.all([
+      render(
+        ClientEmail({
+          ...commonView,
+          clientName: data.client_name,
+        }) as any,
+      ),
+      render(
+        ArtisanEmail({
+          ...commonView,
+          clientName: data.client_name,
+          clientEmail: data.client_email,
+          clientPhone: data.client_phone || undefined,
+          clientAddress: data.client_address,
+          paymentMethod: data.payment_method,
+        }) as any,
+      ),
+    ]);
+
+    // Send both emails. Failures are surfaced so the admin knows.
+    await sendInvoiceEmail({
+      to: data.client_email,
+      subject: `Votre facture ${invoiceNumber} — Plomberie Dupont`,
+      html: clientHtml,
+      pdfBase64,
+      pdfFilename,
+      replyTo: data.artisan.email,
+    });
+    await sendInvoiceEmail({
+      to: OWNER_EMAIL,
+      subject: `Facture émise : ${invoiceNumber}`,
+      html: artisanHtml,
+      pdfBase64,
+      pdfFilename,
+    });
 
     return {
       invoiceNumber: invoiceNumber as string,
