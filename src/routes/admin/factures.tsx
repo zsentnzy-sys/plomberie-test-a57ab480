@@ -148,15 +148,33 @@ function FacturesPage() {
           invoice_date: invoiceDate,
           lines: parsedLines,
           artisan: ARTISAN_INFO,
+          idempotency_key: idempotencyKey,
         },
       });
       // Download in the browser
       downloadBase64Pdf(res.pdfBase64, `${res.invoiceNumber}.pdf`);
-      toast.success(
-        `Facture ${res.invoiceNumber} générée et envoyée au client et à l'artisan.`,
-      );
-      // Reset lines only
+      const clientOk = res.emailClient.status === "sent";
+      const artisanOk = res.emailArtisan.status === "sent";
+      if (clientOk && artisanOk) {
+        toast.success(
+          res.reused
+            ? `Facture ${res.invoiceNumber} déjà générée — PDF retéléchargé.`
+            : `Facture ${res.invoiceNumber} générée et envoyée au client et à l'artisan.`,
+        );
+      } else {
+        const failed: string[] = [];
+        if (!clientOk)
+          failed.push(`client (${res.emailClient.error ?? "erreur"})`);
+        if (!artisanOk)
+          failed.push(`artisan (${res.emailArtisan.error ?? "erreur"})`);
+        toast.warning(
+          `Facture ${res.invoiceNumber} enregistrée, PDF téléchargé, mais échec d'envoi : ${failed.join(" · ")}`,
+          { duration: 10000 },
+        );
+      }
+      // Reset lines and rotate idempotency key for the next invoice.
       setLines([newLine()]);
+      setIdempotencyKey(crypto.randomUUID());
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erreur inconnue";
       toast.error(`Échec : ${msg}`);
