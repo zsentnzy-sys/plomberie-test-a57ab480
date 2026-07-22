@@ -105,13 +105,13 @@ export const generateInvoice = createServerFn({ method: "POST" })
         _client_name: data.client_name,
         _client_address: data.client_address,
         _client_email: data.client_email,
-        _client_phone: data.client_phone || null,
+        _client_phone: data.client_phone || "",
         _payment_method: data.payment_method,
         _invoice_date: data.invoice_date,
         _total_ht: totals.totalHT,
         _total_tva: totals.totalTVA,
         _total_ttc: totals.totalTTC,
-        _artisan_snapshot: artisanSnapshot as unknown as Record<string, unknown>,
+        _artisan_snapshot: artisanSnapshot as unknown as import("@/integrations/supabase/types").Json,
       },
     );
     if (rpcErr || !rpcRows || rpcRows.length === 0) {
