@@ -13,6 +13,9 @@ export interface SendInvoiceEmailParams {
   pdfFilename: string
   replyTo?: string
   from?: string
+  // Per-recipient idempotency key forwarded to Resend so retries don't
+  // duplicate the delivery (e.g. invoice/<invoiceId>/client/v1).
+  idempotencyKey?: string
 }
 
 // Default sender. The domain part MUST be verified in the Resend dashboard,
@@ -46,6 +49,7 @@ export async function sendInvoiceEmail(params: SendInvoiceEmailParams): Promise<
       'Content-Type': 'application/json',
       Authorization: `Bearer ${lovableKey}`,
       'X-Connection-Api-Key': resendKey,
+      ...(params.idempotencyKey ? { 'Idempotency-Key': params.idempotencyKey } : {}),
     },
     body: JSON.stringify(body),
   })
