@@ -1,82 +1,111 @@
 ## Objectif
 
-Fiabiliser le module de facturation : persistance des factures, stockage privé du PDF, résilience des envois d'emails et idempotence des soumissions.
+Fiabiliser le module de facturation via une nouvelle migration corrective et une refonte du handler serveur, sans toucher au design ni aux validations du formulaire.
 
-## 1. Persistance des factures et lignes
+## 1. Nouvelle migration SQL (corrective, additive uniquement)
 
-Nouvelles tables (migration Supabase) :
+Fichier : `supabase/migrations/<timestamp>_invoices_hardening.sql`. Aucune migration existante n'est modifiée.
 
-- `public.invoices`
-  - `id uuid pk`, `invoice_number text unique not null`
-  - `created_by uuid not null` (auth.uid de l'admin)
-  - `client_name`, `client_address`, `client_email`, `client_phone`
-  - `payment_method`, `invoice_date date`
-  - `total_ht numeric(12,2)`, `total_tva numeric(12,2)`, `total_ttc numeric(12,2)`
-  - `pdf_storage_path text` (chemin dans le bucket)
-  - `email_client_status text` (`pending|sent|failed`), `email_client_error text`
-  - `email_artisan_status text`, `email_artisan_error text`
-  - `idempotency_key text unique` (voir §4)
-  - `created_at`, `updated_at` + trigger `update_updated_at`
+### `public.invoices`
+- Nouveau type enum `invoice_status` : `generating | generation_failed | ready | sending | sent | partially_sent | send_failed | cancelled`.
+- Ajouts : `status invoice_status not null default 'generating'`, `generation_error text`, `sent_at timestamptz`, `cancelled_at timestamptz`, `artisan_snapshot jsonb not null default '{}'::jsonb` (backfill pour lignes existantes puis suppression du default).
+- `alter column pdf_storage_path drop not null`.
+- Contraintes CHECK :
+  - `email_client_status` / `email_artisan_status` ∈ `{pending, sent, failed}` (défaut `pending`).
+  - `total_ht >= 0`, `total_tva >= 0`, `total_ttc >= 0`.
+  - `abs(total_ttc - (total_ht + total_tva)) < 0.01`.
+- Conservation des contraintes uniques existantes `invoice_number` et `idempotency_key` (aucun `DROP`).
 
-- `public.invoice_lines`
-  - `id uuid pk`, `invoice_id uuid fk → invoices(id) on delete cascade`
-  - `position int`, `type`, `description`, `unit_price_ht`, `quantity`, `tva`
-  - `line_total_ht`, `line_total_ttc`
+### `public.invoice_lines`
+- Ajout `line_total_tva numeric(12,2) not null default 0` (backfill = `line_total_ttc - line_total_ht`, puis retrait du default).
+- Contrainte unique `(invoice_id, position)`.
+- Index conservé sur `invoice_id` (créé si absent).
+- CHECK : `position >= 1`, `quantity > 0`, `unit_price_ht >= 0`, `tva in (0, 5.5, 10, 20)`, `line_total_ht >= 0`, `line_total_tva >= 0`, `abs(line_total_ttc - (line_total_ht + line_total_tva)) < 0.01`.
 
-RLS :
-- `GRANT` habituels à `authenticated` + `service_role`.
-- Policies `SELECT` restreintes aux admins via `has_role(auth.uid(), 'admin')` sur les deux tables.
-- Pas de policy `INSERT/UPDATE/DELETE` côté client — écritures uniquement via server function (service_role / admin RPC).
+### RPC transactionnelle `public.create_invoice_for_idempotency`
+- Arguments : `_idempotency_key uuid`, `_client_name`, `_client_address`, `_client_email`, `_client_phone`, `_payment_method`, `_invoice_date date`, `_total_ht`, `_total_tva`, `_total_ttc`, `_artisan_snapshot jsonb`.
+- `SECURITY DEFINER`, `search_path = public`.
+- Étapes atomiques :
+  1. `has_role(auth.uid(), 'admin')` sinon `RAISE EXCEPTION`.
+  2. `SELECT id, invoice_number FROM invoices WHERE idempotency_key = _idempotency_key` — si présent, renvoie `(id, invoice_number, reused=true)`.
+  3. Sinon appelle `next_invoice_number()` et fait un `INSERT` avec `status='generating'`, `created_by = auth.uid()`, `pdf_storage_path = null`.
+  4. Retourne `(id, invoice_number, reused=false)`.
+- GRANT `EXECUTE` à `authenticated`.
 
-## 2. Stockage privé du PDF
+Aucun `DELETE`/`UPDATE` sur les données existantes hors backfills décrits ci-dessus.
 
-- Réutiliser le bucket privé existant `request-attachments` avec un préfixe dédié `invoices/YYYY/FACT-YYYY-XXXX.pdf`, plutôt que créer un nouveau bucket (les policies restrictives sont déjà en place).
-- Upload via `supabaseAdmin.storage` dans la server function (service_role) après génération du PDF.
-- Chemin stocké dans `invoices.pdf_storage_path`. Aucun lien signé n'est envoyé par email (les emails gardent le PDF en pièce jointe via Resend).
-- Nouvelle server function `getInvoicePdfSignedUrl({ invoiceId })` (admin-gated) pour retélécharger un PDF depuis un futur écran d'historique — pas de UI dans ce plan, juste l'endpoint.
+## 2. Séparation stricte des informations artisan
 
-## 3. Gestion des échecs partiels d'e-mail
+- Nouveau fichier `src/lib/artisan.server.ts` (server-only) exportant `ARTISAN_INFO` (company, fullName, address, phone, email, siret, iban, bic, legal) et une fonction `buildArtisanSnapshot()` retournant l'objet à persister dans `artisan_snapshot`.
+- Suppression du bloc `ARTISAN_INFO` dans `src/routes/admin/factures.tsx` et retrait du champ `artisan` du payload envoyé au serveur.
+- Schéma Zod `invoiceSchema` dans `src/lib/invoices.functions.ts` : suppression du sous-objet `artisan`. Le client n'envoie plus SIRET/IBAN/BIC/mentions légales.
+- Le PDF utilise l'artisan lu côté serveur ; le rendu et l'entête PDF sont inchangés visuellement.
 
-Aujourd'hui : si l'email client réussit et l'email artisan échoue, l'exception fait échouer toute la server function alors que la facture (numéro + PDF) est déjà générée.
+## 3. Refonte de `generateInvoice` (`src/lib/invoices.functions.ts`)
 
-Nouveau comportement dans `generateInvoice` :
-1. Réserver le numéro, générer le PDF, uploader dans le bucket, insérer `invoices` + `invoice_lines` (statuts email = `pending`).
-2. Envoyer email client → mettre à jour `email_client_status` (`sent` ou `failed` + message).
-3. Envoyer email artisan → même chose.
-4. Retourner au front `{ invoiceNumber, pdfBase64, emailClient: {...}, emailArtisan: {...} }` sans throw si un seul email échoue.
-5. Le front (`src/routes/admin/factures.tsx`) affiche :
-   - toast succès complet si les deux OK,
-   - toast d'avertissement listant l'email en échec sinon,
-   - toast d'erreur uniquement si la facture elle-même n'a pas pu être créée/persistée.
+Nouveau flux (l'ordre remplace l'ancien `SELECT idempotency_key → next_invoice_number → INSERT`) :
 
-Un futur bouton "renvoyer l'email" pourra s'appuyer sur les statuts persistés (hors scope de ce plan).
+1. Vérification admin (inchangée).
+2. Calcul des totaux serveur (`computeTotals`).
+3. Construction de `artisan_snapshot` via `buildArtisanSnapshot()`.
+4. `context.supabase.rpc('create_invoice_for_idempotency', {...})` — retourne `{ invoiceId, invoiceNumber, reused }`.
+5. Chemin `reused = true` :
+   - Charge la facture (`status`, `pdf_storage_path`, totaux persistés, statuts e-mails, `artisan_snapshot`, lignes).
+   - Si `pdf_storage_path` présent : télécharge et retourne comme aujourd'hui.
+   - Sinon : régénère le PDF **depuis les données persistées** (invoices + invoice_lines + artisan_snapshot), sans réattribuer de numéro ; upload, `UPDATE invoices SET pdf_storage_path=..., status='ready'`.
+   - Ne renvoie pas d'e-mail automatiquement pour un reused (les statuts e-mails restent tels que persistés).
+6. Chemin `reused = false` :
+   1. `INSERT` des `invoice_lines` (avec `line_total_tva`). Sur erreur : `UPDATE invoices SET status='generation_failed', generation_error=<msg>` et throw.
+   2. Génération PDF depuis les données persistées.
+   3. Upload PDF dans `request-attachments` (`invoices/YYYY/FACT-YYYY-XXXX.pdf`).
+   4. `UPDATE invoices SET pdf_storage_path=..., status='ready'`.
+   5. Toute erreur dans 6.2/6.3/6.4 : `UPDATE invoices SET status='generation_failed', generation_error=<msg>` puis throw (pas de suppression de la facture ni de rollback du numéro).
+7. Envoi e-mails (uniquement si `!reused` ou si les statuts persistés valent `pending`) :
+   - Passe `status='sending'`.
+   - Envoie l'e-mail client, puis `UPDATE email_client_status/error` immédiatement, vérifie l'erreur Supabase (log + poursuite).
+   - Idem artisan.
+   - Recharge les deux statuts effectifs et calcule le statut global :
+     - `sent` si les deux `sent`.
+     - `partially_sent` si un `sent` et un `failed`.
+     - `send_failed` si les deux `failed`.
+     - Si l'un est encore `pending`, ne pas convertir en `failed` — laisser `sending` et remonter l'erreur.
+   - `UPDATE invoices SET status=<global>, sent_at = case when 'sent' then now() end`.
+8. Idempotence Resend par destinataire (nouveaux headers) : `sendInvoiceEmail` accepte `idempotencyKey` et envoie `Idempotency-Key: invoice/<invoiceId>/client/v1` (resp. `.../artisan/v1`) au gateway Resend.
+9. Retour au front : `{ invoiceId, invoiceNumber, pdfBase64, totals, emailClient, emailArtisan, reused, status }`.
 
-## 4. Idempotence
+## 4. `getInvoicePdfSignedUrl`
 
-Objectif : un double-clic ou un retry réseau ne doit pas créer deux factures ni renvoyer deux fois les emails.
+Inchangé fonctionnellement ; toujours admin-gated et scoping RLS via `supabaseAdmin` + bucket privé.
 
-- Le front génère une `idempotencyKey` (UUID v4) au chargement du formulaire, la renvoie dans le payload, et la régénère après un succès (ou après un reset explicite).
-- Le schéma Zod accepte `idempotency_key: z.string().uuid()`.
-- Dans la server function, avant toute action coûteuse :
-  - `SELECT` sur `invoices` par `idempotency_key`.
-  - Si trouvé : re-télécharger le PDF depuis le bucket (`supabaseAdmin.storage.download`), le ré-encoder en base64, et retourner le même résultat qu'à la première exécution (mêmes statuts email persistés). Aucun nouvel envoi d'email, aucun nouveau numéro.
-- Contrainte `unique(idempotency_key)` en garde-fou base de données contre les races.
+## 5. Front `src/routes/admin/factures.tsx`
+
+Modifications minimales, aucune retouche visuelle :
+- Retrait du bloc `ARTISAN_INFO` et du champ `artisan` dans le payload.
+- Ajout d'un `invoiceIdRef` (state) qui stocke `res.invoiceId` après la première tentative.
+- Après un **échec partiel d'e-mail** (`partially_sent` / `send_failed`) : **ne pas** régénérer `idempotencyKey` ni réinitialiser les lignes. Un nouveau clic sur "Générer et envoyer" réutilise donc la même facture (branche `reused=true`, futur bouton de renvoi ciblé pourra pointer sur `invoiceId`).
+- Après un succès complet (`sent`) : reset des lignes et rotation de `idempotencyKey` (comportement actuel).
+- Après un throw serveur (`generation_failed`) : conserver la clé pour permettre le retry sur la même facture ; afficher l'erreur.
+- Toasts : conserver les libellés actuels, ajouter un cas explicite `send_failed` (tous les e-mails ont échoué).
+
+## 6. Sécurité conservée
+
+- Authentification `requireSupabaseAuth` inchangée.
+- `has_role(auth.uid(), 'admin')` vérifié dans la RPC + dans le handler.
+- Zod : schéma resserré (suppression `artisan`) mais toutes les autres validations préservées.
+- RLS admin-only sur `invoices` / `invoice_lines` : inchangées, la RPC est `SECURITY DEFINER`.
+- Bucket privé `request-attachments` et téléchargement via `createSignedUrl` : inchangés.
 
 ## Fichiers touchés
 
-- Nouvelle migration : `invoices`, `invoice_lines`, policies, grants, trigger updated_at.
-- `src/lib/invoices.functions.ts` : refonte du handler (persistance, upload, gestion partielle, idempotence) + nouvelle server function `getInvoicePdfSignedUrl`.
-- `src/lib/invoices.server.ts` : ajout d'un helper `uploadInvoicePdf(path, bytes)` utilisant `supabaseAdmin`.
-- `src/routes/admin/factures.tsx` : génération de l'`idempotencyKey`, gestion des retours partiels (toasts adaptés), reset de la clé après succès.
-
-## Détails techniques
-
-- `supabaseAdmin` importé dynamiquement dans le handler (règle du template TanStack).
-- Les policies sur les nouvelles tables interdisent tout accès client hors admins — la @security-memory sera mise à jour pour documenter ces invariants après implémentation.
-- Aucune modification du flux Resend ni des templates emails.
-- Aucun impact sur les autres formulaires (contact, devis, RDV).
+- **Nouvelle migration** : `supabase/migrations/<timestamp>_invoices_hardening.sql` (colonnes, contraintes, enum, RPC).
+- **Nouveau** : `src/lib/artisan.server.ts`.
+- **Modifié** : `src/lib/invoices.functions.ts` (schéma sans artisan, refonte du handler, appel RPC, régénération PDF, statuts globaux).
+- **Modifié** : `src/lib/invoice-email.server.ts` (paramètre `idempotencyKey` → header `Idempotency-Key`).
+- **Modifié** : `src/lib/invoices.server.ts` si nécessaire pour accepter des lignes hydratées depuis la base (mêmes calculs, aucune modification visuelle du PDF).
+- **Modifié** : `src/routes/admin/factures.tsx` (retrait artisan, conservation de la clé/idempotence après échec partiel, gestion `invoiceId`).
 
 ## Hors scope
 
-- Écran d'historique des factures (liste, recherche, renvoi manuel) — les endpoints existeront mais pas l'UI.
-- Purge / archivage automatique des PDF.
+- UI de renvoi ciblé d'un e-mail ou d'annulation (`status='cancelled'`) — le schéma les supporte, l'écran viendra plus tard.
+- Historique/liste des factures.
+- Migration de purge du bucket.

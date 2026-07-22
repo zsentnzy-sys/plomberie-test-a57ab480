@@ -18,22 +18,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// ============================================================
-// Informations artisan — modifier ici pour changer l'entête PDF
-// ============================================================
-const ARTISAN_INFO = {
-  company: "Plomberie Dupont",
-  fullName: "Jean Dupont",
-  address: "12 rue des Artisans\n57000 Metz",
-  phone: "+33 6 00 00 00 00",
-  email: "contact@plomberie-dupont.fr",
-  siret: "SIRET 000 000 000 00000 - APE 4322A",
-  iban: "FR76 0000 0000 0000 0000 0000 000",
-  bic: "AGRIFRPP",
-  legal:
-    "Assurance décennale et responsabilité civile professionnelle souscrites. TVA sur les débits. En cas de retard de paiement, indemnité forfaitaire de 40 EUR (art. L441-6 du Code de commerce). Facture payable à réception.",
-} as const;
-
 type TvaRate = 0 | 5.5 | 10 | 20;
 type LineType = "Service" | "Matériel" | "Taux horaire";
 type Payment = "Carte bancaire" | "Virement bancaire" | "Chèque" | "Espèces";
@@ -80,6 +64,9 @@ function FacturesPage() {
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() =>
     crypto.randomUUID(),
   );
+  // Kept after a partial email failure so a future targeted-resend UI can
+  // reference the exact invoice without creating a new one.
+  const [lastInvoiceId, setLastInvoiceId] = useState<string | null>(null);
 
   const submit = useServerFn(generateInvoice);
 
@@ -147,10 +134,10 @@ function FacturesPage() {
           payment_method: payment,
           invoice_date: invoiceDate,
           lines: parsedLines,
-          artisan: ARTISAN_INFO,
           idempotency_key: idempotencyKey,
         },
       });
+      setLastInvoiceId(res.invoiceId);
       // Download in the browser
       downloadBase64Pdf(res.pdfBase64, `${res.invoiceNumber}.pdf`);
       const clientOk = res.emailClient.status === "sent";
@@ -161,23 +148,34 @@ function FacturesPage() {
             ? `Facture ${res.invoiceNumber} déjà générée — PDF retéléchargé.`
             : `Facture ${res.invoiceNumber} générée et envoyée au client et à l'artisan.`,
         );
+        // Full success: rotate the idempotency key so the next click starts a
+        // brand-new invoice, and reset the line editor.
+        setLines([newLine()]);
+        setIdempotencyKey(crypto.randomUUID());
+        setLastInvoiceId(null);
       } else {
         const failed: string[] = [];
         if (!clientOk)
           failed.push(`client (${res.emailClient.error ?? "erreur"})`);
         if (!artisanOk)
           failed.push(`artisan (${res.emailArtisan.error ?? "erreur"})`);
-        toast.warning(
-          `Facture ${res.invoiceNumber} enregistrée, PDF téléchargé, mais échec d'envoi : ${failed.join(" · ")}`,
-          { duration: 10000 },
-        );
+        const allFailed = !clientOk && !artisanOk;
+        const msg = `Facture ${res.invoiceNumber} enregistrée, PDF téléchargé, mais échec d'envoi : ${failed.join(" · ")}`;
+        if (allFailed) {
+          toast.error(msg, { duration: 10000 });
+        } else {
+          toast.warning(msg, { duration: 10000 });
+        }
+        // Partial/full email failure: KEEP the idempotency key and the form
+        // state so retrying reuses the same invoice instead of creating a new
+        // number/row.
       }
-      // Reset lines and rotate idempotency key for the next invoice.
-      setLines([newLine()]);
-      setIdempotencyKey(crypto.randomUUID());
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erreur inconnue";
       toast.error(`Échec : ${msg}`);
+      // Do not rotate the idempotency key: the server may have marked the
+      // invoice as generation_failed but kept the number reserved, and the
+      // user can retry against the same row.
     } finally {
       setSubmitting(false);
     }

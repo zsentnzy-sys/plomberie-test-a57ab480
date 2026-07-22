@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Json } from "@/integrations/supabase/types";
 
 const lineSchema = z.object({
   type: z.enum(["Service", "Matériel", "Taux horaire"]),
@@ -25,17 +26,6 @@ const invoiceSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide (YYYY-MM-DD)"),
   lines: z.array(lineSchema).min(1, "Ajoutez au moins une ligne").max(50),
-  artisan: z.object({
-    company: z.string().max(120),
-    fullName: z.string().max(120),
-    address: z.string().max(400),
-    phone: z.string().max(30),
-    email: z.string().email().max(255),
-    siret: z.string().max(60),
-    iban: z.string().max(60).optional().or(z.literal("")),
-    bic: z.string().max(30).optional().or(z.literal("")),
-    legal: z.string().max(600),
-  }),
   idempotency_key: z.string().uuid("Clé d'idempotence invalide"),
 });
 
@@ -47,12 +37,23 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-export type EmailStatus = "sent" | "failed";
+export type EmailStatus = "sent" | "failed" | "pending";
 export interface InvoiceEmailResult {
   status: EmailStatus;
   error?: string;
 }
+export type InvoiceGlobalStatus =
+  | "generating"
+  | "generation_failed"
+  | "ready"
+  | "sending"
+  | "sent"
+  | "partially_sent"
+  | "send_failed"
+  | "cancelled";
+
 export interface GenerateInvoiceResult {
+  invoiceId: string;
   invoiceNumber: string;
   pdfBase64: string;
   totals: {
@@ -63,13 +64,18 @@ export interface GenerateInvoiceResult {
   emailClient: InvoiceEmailResult;
   emailArtisan: InvoiceEmailResult;
   reused: boolean;
+  status: InvoiceGlobalStatus;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 export const generateInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => invoiceSchema.parse(data))
   .handler(async ({ data, context }): Promise<GenerateInvoiceResult> => {
-    // Admin gate
+    // Admin gate (defence-in-depth; the RPC also checks).
     const { data: isAdmin, error: roleErr } = await context.supabase.rpc(
       "has_role",
       { _user_id: context.userId, _role: "admin" },
@@ -80,112 +86,175 @@ export const generateInvoice = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
+    const { buildArtisanSnapshot } = await import("@/lib/artisan.server");
+    const {
+      computeTotals,
+      generateInvoicePdf,
+      formatEUR,
+      formatDateFR,
+    } = await import("@/lib/invoices.server");
 
-    // ---- Idempotence : renvoie le résultat précédent si la clé existe déjà.
-    const { data: existing, error: existingErr } = await supabaseAdmin
-      .from("invoices")
-      .select(
-        "invoice_number, pdf_storage_path, total_ht, total_tva, total_ttc, email_client_status, email_client_error, email_artisan_status, email_artisan_error",
-      )
-      .eq("idempotency_key", data.idempotency_key)
-      .maybeSingle();
-    if (existingErr) throw new Error("Lecture de la facture existante impossible.");
-    if (existing) {
-      const dl = await supabaseAdmin.storage
-        .from(BUCKET)
-        .download(existing.pdf_storage_path);
-      if (dl.error || !dl.data) throw new Error("PDF précédent introuvable.");
-      const buf = new Uint8Array(await dl.data.arrayBuffer());
+    const totals = computeTotals(data.lines);
+    const artisanSnapshot = buildArtisanSnapshot();
+
+    // ---- Atomic idempotent creation (existing row returned, otherwise
+    // number reserved + row inserted with status='generating').
+    const { data: rpcRows, error: rpcErr } = await context.supabase.rpc(
+      "create_invoice_for_idempotency",
+      {
+        _idempotency_key: data.idempotency_key,
+        _client_name: data.client_name,
+        _client_address: data.client_address,
+        _client_email: data.client_email,
+        _client_phone: data.client_phone || "",
+        _payment_method: data.payment_method,
+        _invoice_date: data.invoice_date,
+        _total_ht: totals.totalHT,
+        _total_tva: totals.totalTVA,
+        _total_ttc: totals.totalTTC,
+        _artisan_snapshot: artisanSnapshot as unknown as Json,
+      },
+    );
+    if (rpcErr || !rpcRows || rpcRows.length === 0) {
+      throw new Error(
+        `Création de la facture impossible : ${rpcErr?.message ?? "inconnu"}`,
+      );
+    }
+    const row = rpcRows[0] as {
+      invoice_id: string;
+      invoice_number: string;
+      reused: boolean;
+    };
+    const invoiceId = row.invoice_id;
+    const invoiceNo = row.invoice_number;
+    const reused = row.reused;
+
+    // ---- Reused path ----------------------------------------------------
+    if (reused) {
+      const { data: existing, error: exErr } = await supabaseAdmin
+        .from("invoices")
+        .select(
+          "id, invoice_number, status, pdf_storage_path, total_ht, total_tva, total_ttc, invoice_date, payment_method, client_name, client_address, client_email, client_phone, email_client_status, email_client_error, email_artisan_status, email_artisan_error, artisan_snapshot",
+        )
+        .eq("id", invoiceId)
+        .single();
+      if (exErr || !existing) throw new Error("Facture existante introuvable.");
+
+      let pdfPath = existing.pdf_storage_path;
+      let pdfBytes: Uint8Array | null = null;
+
+      if (pdfPath) {
+        const dl = await supabaseAdmin.storage.from(BUCKET).download(pdfPath);
+        if (dl.error || !dl.data) {
+          pdfPath = null; // fall through to regeneration
+        } else {
+          pdfBytes = new Uint8Array(await dl.data.arrayBuffer());
+        }
+      }
+
+      if (!pdfBytes) {
+        // Regenerate from persisted data (no new number).
+        const { data: persistedLines, error: linesErr } = await supabaseAdmin
+          .from("invoice_lines")
+          .select(
+            "position, type, description, unit_price_ht, quantity, tva",
+          )
+          .eq("invoice_id", invoiceId)
+          .order("position", { ascending: true });
+        if (linesErr || !persistedLines) {
+          throw new Error("Lignes de facture introuvables.");
+        }
+        const rebuiltLines = persistedLines.map((l) => ({
+          type: l.type as "Service" | "Matériel" | "Taux horaire",
+          description: l.description,
+          unit_price_ht: Number(l.unit_price_ht),
+          quantity: Number(l.quantity),
+          tva: Number(l.tva) as 0 | 5.5 | 10 | 20,
+        }));
+        const rebuiltTotals = computeTotals(rebuiltLines);
+        const snap = (existing.artisan_snapshot ?? {}) as Record<string, unknown>;
+        pdfBytes = await generateInvoicePdf({
+          invoiceNumber: existing.invoice_number,
+          artisan: {
+            company: String(snap.company ?? ""),
+            fullName: String(snap.fullName ?? ""),
+            address: String(snap.address ?? ""),
+            phone: String(snap.phone ?? ""),
+            email: String(snap.email ?? ""),
+            siret: String(snap.siret ?? ""),
+            iban: snap.iban ? String(snap.iban) : undefined,
+            bic: snap.bic ? String(snap.bic) : undefined,
+            legal: String(snap.legal ?? ""),
+          },
+          input: {
+            client_name: existing.client_name,
+            client_address: existing.client_address,
+            client_email: existing.client_email,
+            client_phone: existing.client_phone ?? undefined,
+            payment_method:
+              existing.payment_method as GenerateInvoiceResult["totals"] extends never
+                ? never
+                : "Carte bancaire" | "Virement bancaire" | "Chèque" | "Espèces",
+            invoice_date: existing.invoice_date,
+            lines: rebuiltLines,
+          },
+          totals: rebuiltTotals,
+        });
+
+        const year = existing.invoice_date.slice(0, 4);
+        const newPath = `invoices/${year}/${existing.invoice_number}.pdf`;
+        const up = await supabaseAdmin.storage
+          .from(BUCKET)
+          .upload(newPath, pdfBytes, {
+            contentType: "application/pdf",
+            upsert: true,
+          });
+        if (up.error) {
+          throw new Error(`Stockage du PDF impossible : ${up.error.message}`);
+        }
+        pdfPath = newPath;
+        await supabaseAdmin
+          .from("invoices")
+          .update({ pdf_storage_path: newPath, status: "ready" })
+          .eq("id", invoiceId);
+      }
+
       return {
+        invoiceId,
         invoiceNumber: existing.invoice_number,
-        pdfBase64: bytesToBase64(buf),
+        pdfBase64: bytesToBase64(pdfBytes!),
         totals: {
           totalHT: Number(existing.total_ht),
           totalTVA: Number(existing.total_tva),
           totalTTC: Number(existing.total_ttc),
         },
         emailClient: {
-          status: existing.email_client_status === "sent" ? "sent" : "failed",
+          status:
+            (existing.email_client_status as EmailStatus) ?? "pending",
           error: existing.email_client_error ?? undefined,
         },
         emailArtisan: {
-          status: existing.email_artisan_status === "sent" ? "sent" : "failed",
+          status:
+            (existing.email_artisan_status as EmailStatus) ?? "pending",
           error: existing.email_artisan_error ?? undefined,
         },
         reused: true,
+        status: (existing.status as InvoiceGlobalStatus) ?? "ready",
       };
     }
 
-    // Reserve invoice number via admin-only RPC (uses auth.uid())
-    const { data: invoiceNumber, error: numErr } = await context.supabase.rpc(
-      "next_invoice_number",
-    );
-    if (numErr || !invoiceNumber) {
-      throw new Error("Impossible d'obtenir un numéro de facture.");
+    // ---- Fresh invoice: insert lines, build PDF, upload, mark ready ----
+    async function markGenerationFailed(msg: string) {
+      await supabaseAdmin
+        .from("invoices")
+        .update({ status: "generation_failed", generation_error: msg })
+        .eq("id", invoiceId);
     }
-    const invoiceNo = invoiceNumber as string;
-
-    // Build PDF (server-only helpers loaded lazily to keep client bundle clean)
-    const { computeTotals, generateInvoicePdf, formatEUR, formatDateFR } =
-      await import("@/lib/invoices.server");
-    const totals = computeTotals(data.lines);
-    const pdfBytes = await generateInvoicePdf({
-      invoiceNumber: invoiceNo,
-      artisan: {
-        ...data.artisan,
-        iban: data.artisan.iban || undefined,
-        bic: data.artisan.bic || undefined,
-      },
-      input: data,
-      totals,
-    });
-
-    const pdfBase64 = bytesToBase64(pdfBytes);
-    const pdfFilename = `${invoiceNo}.pdf`;
-    const year = data.invoice_date.slice(0, 4);
-    const storagePath = `invoices/${year}/${invoiceNo}.pdf`;
-
-    // Upload PDF (private bucket) before persisting the row.
-    const up = await supabaseAdmin.storage
-      .from(BUCKET)
-      .upload(storagePath, pdfBytes, {
-        contentType: "application/pdf",
-        upsert: false,
-      });
-    if (up.error) {
-      throw new Error(`Stockage du PDF impossible : ${up.error.message}`);
-    }
-
-    // Persist invoice + lines (pending email status).
-    const { data: inserted, error: insErr } = await supabaseAdmin
-      .from("invoices")
-      .insert({
-        invoice_number: invoiceNo,
-        created_by: context.userId,
-        client_name: data.client_name,
-        client_address: data.client_address,
-        client_email: data.client_email,
-        client_phone: data.client_phone || null,
-        payment_method: data.payment_method,
-        invoice_date: data.invoice_date,
-        total_ht: totals.totalHT,
-        total_tva: totals.totalTVA,
-        total_ttc: totals.totalTTC,
-        pdf_storage_path: storagePath,
-        idempotency_key: data.idempotency_key,
-      })
-      .select("id")
-      .single();
-    if (insErr || !inserted) {
-      // Rollback the storage upload to keep bucket clean.
-      await supabaseAdmin.storage.from(BUCKET).remove([storagePath]);
-      throw new Error(`Enregistrement de la facture impossible : ${insErr?.message ?? "inconnu"}`);
-    }
-    const invoiceId = inserted.id;
 
     const linesRows = data.lines.map((l, i) => {
-      const ht = l.unit_price_ht * l.quantity;
-      const ttc = ht * (1 + l.tva / 100);
+      const ht = round2(l.unit_price_ht * l.quantity);
+      const tva = round2(ht * (l.tva / 100));
+      const ttc = round2(ht + tva);
       return {
         invoice_id: invoiceId,
         position: i + 1,
@@ -194,23 +263,67 @@ export const generateInvoice = createServerFn({ method: "POST" })
         unit_price_ht: l.unit_price_ht,
         quantity: l.quantity,
         tva: l.tva,
-        line_total_ht: Math.round(ht * 100) / 100,
-        line_total_ttc: Math.round(ttc * 100) / 100,
+        line_total_ht: ht,
+        line_total_tva: tva,
+        line_total_ttc: ttc,
       };
     });
     const { error: linesErr } = await supabaseAdmin
       .from("invoice_lines")
       .insert(linesRows);
     if (linesErr) {
-      // Best-effort cleanup.
-      await supabaseAdmin.from("invoices").delete().eq("id", invoiceId);
-      await supabaseAdmin.storage.from(BUCKET).remove([storagePath]);
+      await markGenerationFailed(linesErr.message);
       throw new Error(`Enregistrement des lignes impossible : ${linesErr.message}`);
     }
 
-    // Render both emails to HTML server-side, then send via Resend with the
-    // PDF attached. We bypass the queued pipeline here because it doesn't
-    // support attachments.
+    let pdfBytes: Uint8Array;
+    try {
+      pdfBytes = await generateInvoicePdf({
+        invoiceNumber: invoiceNo,
+        artisan: artisanSnapshot,
+        input: {
+          client_name: data.client_name,
+          client_address: data.client_address,
+          client_email: data.client_email,
+          client_phone: data.client_phone || undefined,
+          payment_method: data.payment_method,
+          invoice_date: data.invoice_date,
+          lines: data.lines,
+        },
+        totals,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await markGenerationFailed(msg);
+      throw new Error(`Génération du PDF impossible : ${msg}`);
+    }
+
+    const year = data.invoice_date.slice(0, 4);
+    const storagePath = `invoices/${year}/${invoiceNo}.pdf`;
+    const up = await supabaseAdmin.storage
+      .from(BUCKET)
+      .upload(storagePath, pdfBytes, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
+    if (up.error) {
+      await markGenerationFailed(up.error.message);
+      throw new Error(`Stockage du PDF impossible : ${up.error.message}`);
+    }
+
+    const { error: readyErr } = await supabaseAdmin
+      .from("invoices")
+      .update({ pdf_storage_path: storagePath, status: "ready" })
+      .eq("id", invoiceId);
+    if (readyErr) {
+      await markGenerationFailed(readyErr.message);
+      throw new Error(`Mise à jour du statut impossible : ${readyErr.message}`);
+    }
+
+    const pdfBase64 = bytesToBase64(pdfBytes);
+    const pdfFilename = `${invoiceNo}.pdf`;
+
+    // ---- Emails: independent sends + independent status updates -------
     const [{ render }, ClientEmailMod, ArtisanEmailMod, { sendInvoiceEmail }, { OWNER_EMAIL }] =
       await Promise.all([
         import("@react-email/components"),
@@ -232,10 +345,7 @@ export const generateInvoice = createServerFn({ method: "POST" })
 
     const [clientHtml, artisanHtml] = await Promise.all([
       render(
-        ClientEmail({
-          ...commonView,
-          clientName: data.client_name,
-        }) as any,
+        ClientEmail({ ...commonView, clientName: data.client_name }) as any,
       ),
       render(
         ArtisanEmail({
@@ -249,9 +359,15 @@ export const generateInvoice = createServerFn({ method: "POST" })
       ),
     ]);
 
-    // Send both emails independently. A single failure must not roll back
-    // the invoice — the admin still gets the PDF and can retry later.
-    async function trySend(fn: () => Promise<void>): Promise<InvoiceEmailResult> {
+    // Enter sending state.
+    await supabaseAdmin
+      .from("invoices")
+      .update({ status: "sending" })
+      .eq("id", invoiceId);
+
+    async function trySend(
+      fn: () => Promise<void>,
+    ): Promise<InvoiceEmailResult> {
       try {
         await fn();
         return { status: "sent" };
@@ -261,6 +377,7 @@ export const generateInvoice = createServerFn({ method: "POST" })
       }
     }
 
+    // Client email first — update its status immediately after the attempt.
     const emailClient = await trySend(() =>
       sendInvoiceEmail({
         to: data.client_email,
@@ -268,9 +385,24 @@ export const generateInvoice = createServerFn({ method: "POST" })
         html: clientHtml,
         pdfBase64,
         pdfFilename,
-        replyTo: data.artisan.email,
+        replyTo: artisanSnapshot.email,
+        idempotencyKey: `invoice/${invoiceId}/client/v1`,
       }),
     );
+    const clientUpdate = await supabaseAdmin
+      .from("invoices")
+      .update({
+        email_client_status: emailClient.status,
+        email_client_error: emailClient.error ?? null,
+      })
+      .eq("id", invoiceId);
+    if (clientUpdate.error) {
+      console.error(
+        `[invoices] failed to persist client email status: ${clientUpdate.error.message}`,
+      );
+    }
+
+    // Then artisan email.
     const emailArtisan = await trySend(() =>
       sendInvoiceEmail({
         to: OWNER_EMAIL,
@@ -278,26 +410,63 @@ export const generateInvoice = createServerFn({ method: "POST" })
         html: artisanHtml,
         pdfBase64,
         pdfFilename,
+        idempotencyKey: `invoice/${invoiceId}/artisan/v1`,
       }),
     );
-
-    await supabaseAdmin
+    const artisanUpdate = await supabaseAdmin
       .from("invoices")
       .update({
-        email_client_status: emailClient.status,
-        email_client_error: emailClient.error ?? null,
         email_artisan_status: emailArtisan.status,
         email_artisan_error: emailArtisan.error ?? null,
       })
       .eq("id", invoiceId);
+    if (artisanUpdate.error) {
+      console.error(
+        `[invoices] failed to persist artisan email status: ${artisanUpdate.error.message}`,
+      );
+    }
+
+    // Compute global status. Only 'sent'/'failed' feed into the global state;
+    // never coerce a 'pending' into 'failed'.
+    let globalStatus: InvoiceGlobalStatus;
+    if (emailClient.status === "sent" && emailArtisan.status === "sent") {
+      globalStatus = "sent";
+    } else if (
+      emailClient.status === "failed" &&
+      emailArtisan.status === "failed"
+    ) {
+      globalStatus = "send_failed";
+    } else if (
+      emailClient.status === "sent" ||
+      emailArtisan.status === "sent"
+    ) {
+      globalStatus = "partially_sent";
+    } else {
+      // Both still pending for some reason — keep 'sending' so a retry can pick up.
+      globalStatus = "sending";
+    }
+
+    await supabaseAdmin
+      .from("invoices")
+      .update({
+        status: globalStatus,
+        sent_at: globalStatus === "sent" ? new Date().toISOString() : null,
+      })
+      .eq("id", invoiceId);
 
     return {
+      invoiceId,
       invoiceNumber: invoiceNo,
       pdfBase64,
-      totals,
+      totals: {
+        totalHT: totals.totalHT,
+        totalTVA: totals.totalTVA,
+        totalTTC: totals.totalTTC,
+      },
       emailClient,
       emailArtisan,
       reused: false,
+      status: globalStatus,
     };
   });
 
@@ -324,6 +493,7 @@ export const getInvoicePdfSignedUrl = createServerFn({ method: "POST" })
       .eq("id", data.invoiceId)
       .maybeSingle();
     if (error || !row) throw new Error("Facture introuvable.");
+    if (!row.pdf_storage_path) throw new Error("PDF non disponible pour cette facture.");
 
     const signed = await supabaseAdmin.storage
       .from(BUCKET)
