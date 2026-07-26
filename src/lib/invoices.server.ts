@@ -2,10 +2,16 @@
 // All layout primitives are shared with quotes via documents.server.ts.
 import {
   renderDocumentPdf,
-  type ArtisanInfo,
+  formatDateFR,
   type DocumentLine,
   type DocumentTotals,
 } from "./documents.server";
+import type { ArtisanInfo } from "./artisan.server";
+import {
+  INVOICE_CLIENT_LABEL,
+  INVOICE_LEGAL,
+  INVOICE_TYPE_LABEL,
+} from "./document-config.server";
 
 export {
   computeTotals,
@@ -17,15 +23,13 @@ export {
   uploadDocumentPdf,
   TVA_RATES,
 } from "./documents.server";
+export type { ArtisanInfo } from "./artisan.server";
 export type {
-  ArtisanInfo,
   DocumentLine as InvoiceLine,
   DocumentLineType as InvoiceLineType,
   DocumentTotals as InvoiceTotals,
   TvaRate,
 } from "./documents.server";
-
-import { formatDateFR } from "./documents.server";
 
 export type PaymentMethod =
   | "Carte bancaire"
@@ -53,6 +57,7 @@ export async function generateInvoicePdf(params: {
   return renderDocumentPdf({
     title: "FACTURE",
     documentNumber: invoiceNumber,
+    documentTypeLabel: INVOICE_TYPE_LABEL,
     artisan,
     client: {
       name: input.client_name,
@@ -60,6 +65,7 @@ export async function generateInvoicePdf(params: {
       email: input.client_email,
       phone: input.client_phone,
     },
+    clientBlockLabel: INVOICE_CLIENT_LABEL,
     metaLines: [
       `Date : ${formatDateFR(input.invoice_date)}`,
       `Paiement : ${input.payment_method}`,
@@ -67,6 +73,7 @@ export async function generateInvoicePdf(params: {
     lines: input.lines,
     totals,
     footerLines: [`Mode de paiement : ${input.payment_method}`],
-    legal: artisan.legal,
+    // Persisted snapshots keep the legal text used at generation time.
+    legal: artisan.legal || INVOICE_LEGAL,
   });
 }

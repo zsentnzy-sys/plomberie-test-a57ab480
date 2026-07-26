@@ -1,25 +1,25 @@
 // Server-only helpers specific to quotes (devis). Layout primitives, totals and
-// formatting come from documents.server.ts — only the labels, validity block
-// and legal mentions are quote-specific.
+// formatting come from documents.server.ts; the commercial/legal wording comes
+// from document-config.server.ts.
 import {
   renderDocumentPdf,
   formatDateFR,
-  type ArtisanInfo,
   type DocumentLine,
   type DocumentTotals,
 } from "./documents.server";
+import type { ArtisanInfo } from "./artisan.server";
+import {
+  QUOTE_CLIENT_LABEL,
+  QUOTE_LEGAL,
+  QUOTE_NOTICE,
+  QUOTE_SIGNATURE_LABEL,
+  QUOTE_TYPE_LABEL,
+} from "./document-config.server";
 
 /** Default validity of a quote, in days. */
 export const QUOTE_VALIDITY_DAYS = 30;
 
-export const QUOTE_NOTICE =
-  "Ce document est un DEVIS et ne constitue pas une facture. Aucun paiement n'est dû à ce stade.";
-
-export const QUOTE_LEGAL =
-  "Devis gratuit et sans engagement. Prix fermes pendant toute la durée de validité indiquée ci-dessus. " +
-  "Pour accepter ce devis, retournez-le signé avec la mention « Bon pour accord », la date et votre signature, " +
-  "ou répondez simplement à l'e-mail de transmission. Les travaux ne débutent qu'après accord écrit du client. " +
-  "TVA applicable selon la nature des travaux. Assurance décennale et responsabilité civile professionnelle souscrites.";
+export { QUOTE_NOTICE, QUOTE_LEGAL } from "./document-config.server";
 
 export interface QuoteInput {
   client_name: string;
@@ -42,6 +42,7 @@ export async function generateQuotePdf(params: {
   return renderDocumentPdf({
     title: "DEVIS",
     documentNumber: quoteNumber,
+    documentTypeLabel: QUOTE_TYPE_LABEL,
     artisan,
     client: {
       name: input.client_name,
@@ -49,6 +50,7 @@ export async function generateQuotePdf(params: {
       email: input.client_email,
       phone: input.client_phone,
     },
+    clientBlockLabel: QUOTE_CLIENT_LABEL,
     metaLines: [
       `Date : ${formatDateFR(input.quote_date)}`,
       `Valable jusqu'au : ${formatDateFR(input.valid_until)}`,
@@ -62,6 +64,7 @@ export async function generateQuotePdf(params: {
     ],
     legal: QUOTE_LEGAL,
     signatureBlock: true,
+    signatureLabel: QUOTE_SIGNATURE_LABEL,
   });
 }
 
