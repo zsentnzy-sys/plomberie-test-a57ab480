@@ -1,0 +1,2 @@
+REVOKE ALL ON FUNCTION public.create_quote_for_idempotency(text, uuid, text, text, text, text, date, date, text, numeric, numeric, numeric, jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.create_quote_for_idempotency(text, uuid, text, text, text, text, date, date, text, numeric, numeric, numeric, jsonb) TO authenticated, service_role;
