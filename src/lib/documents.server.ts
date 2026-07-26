@@ -353,7 +353,7 @@ function drawDocumentLine(ctx: Ctx, l: DocumentLine): void {
 function drawTotalsBlock(ctx: Ctx): void {
   const t = ctx.params.totals;
   // Height: Total HT + one row per TVA rate + Total TVA + highlighted TTC box.
-  const h = 14 * (2 + t.tvaByRate.length) + 34;
+  const h = 14 * (2 + t.tvaByRate.length) + 42;
   ensureSpace(ctx, h + 10);
   ctx.y -= 10;
 
@@ -383,7 +383,7 @@ function drawTotalsBlock(ctx: Ctx): void {
   }
   draw(ctx, "Total TVA", totX, ctx.y, { size: 10, color: COLORS.muted });
   amount(formatEUR(t.totalTVA), 10, ctx.font);
-  ctx.y -= 20;
+  ctx.y -= 28;
   ctx.page.drawRectangle({
     x: totX - 6,
     y: ctx.y - 6,
