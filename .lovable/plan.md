@@ -1,117 +1,61 @@
 ## Objectif
 
-Depuis `/admin/devis`, permettre de transformer une demande de devis en devis PDF numéroté, persisté, stocké dans le bucket privé et envoyé au client (avec copie artisan), sans toucher au design existant.
+Fiabiliser le moteur PDF commun aux factures et devis (pagination, débordements, libellés, duplications) sans toucher au design, aux règles métier, aux RPC, aux e-mails ni à la base.
 
-## 1. Migration SQL (nouvelle, additive)
+## Changements prévus, fichier par fichier
 
-### Enum `quote_status`
+### 1. `src/lib/document-config.server.ts` (nouveau)
 
-`generating | generation_failed | ready | sending | sent | partially_sent | send_failed | accepted | refused | expired | cancelled` 
+Configuration commerciale/juridique, exclusivement serveur :
 
-### `public.quotes`
+- `invoiceLegal` (reprend le texte actuel de `ARTISAN_INFO.legal`)
+- `quoteLegal`, `quoteNotice`, `quoteSignatureLabel` (textes déplacés depuis `quotes.server.ts`)
+- Libellés de bloc client : `invoiceClientLabel = "Facturé à"`, `quoteClientLabel = "Devis adressé à"`
 
-- `id uuid pk default gen_random_uuid()`
-- `quote_number text not null unique`
-- `quote_request_id uuid references public.quote_requests(id) on delete set null`
-- `created_by uuid not null`
-- `client_name`, `client_address`, `client_email`, `client_phone`
-- `quote_date date not null`, `valid_until date not null`
-- `notes text`
-- `total_ht`, `total_tva`, `total_ttc` numeric(12,2) not null
-- `artisan_snapshot jsonb not null`
-- `pdf_storage_path text` (nullable)
-- `status quote_status not null default 'generating'`, `generation_error text`, `sent_at timestamptz`
-- `email_client_status text default 'pending'`, `email_client_error text`
-- `email_artisan_status text default 'pending'`, `email_artisan_error text`
-- `idempotency_key text not null unique`
-- `created_at`, `updated_at` + trigger `update_updated_at_column`
-- CHECK : statuts e-mail ∈ {pending,sent,failed}, totaux >= 0, `abs(total_ttc-(total_ht+total_tva)) < 0.01`, `valid_until >= quote_date`
+### 2. `src/lib/artisan.server.ts`
 
-### `public.quote_lines`
+- Reste la **seule** définition de `ArtisanInfo` (type source).
+- `ARTISAN_INFO` et `buildArtisanSnapshot()` inchangés, snapshot toujours compatible avec les données déjà persistées.
 
-Même forme que `invoice_lines` : `quote_id`, `position`, `type`, `description`, `unit_price_ht`, `quantity`, `tva`, `line_total_ht`, `line_total_tva`, `line_total_ttc`, unique `(quote_id, position)`, index sur `quote_id`, CHECK montants/TVA/position.
+### 3. `src/lib/documents.server.ts` (cœur du travail)
 
-### Grants + RLS
+- Supprimer l'interface locale `ArtisanInfo` ; importer le type depuis `artisan.server.ts` et le réexporter pour ne rien casser. (import type { ArtisanInfo } from "./artisan.server";)
+- `RenderDocumentParams` : ajout de `clientBlockLabel` (obligatoire), `documentTypeLabel` et `continuationLabel` (optionnels).
+- Découpage de `renderDocumentPdf()` en helpers privés : `drawPageHeader`, `drawClientBlock`, `drawTableHeader`, `drawDocumentLine`, `drawTotalsBlock`, `drawNotesBlock`, `drawFooterBlock`, `drawSignatureBlock`, `addContinuationPage`. Un petit contexte de rendu interne (page, y, fonts, couleurs, marges, `ensureSpace(h)`) évite toute duplication.
+- Pagination : hauteur de chaque ligne calculée **avant** dessin (nombre de lignes de description) ; nouvelle page si elle ne tient pas ; jamais de ligne coupée.
+- Chaque page de continuation : mêmes marges, rappel discret « TYPE N° XXX (suite) », puis en-tête de tableau redessiné.
+- Totaux : hauteur calculée selon le nombre de taux de TVA, bloc gardé groupé sur une page.
+- Notes, footer, IBAN/BIC, mentions légales, signature : contrôle d'espace avant chaque bloc, continuation automatique, zone « Bon pour accord » jamais scindée.
+- `wrapText` : mesure réelle via `font.widthOfTextAtSize()` (largeur en points + taille), découpe des mots très longs sans espace, sanitisation WinAnsi conservée. L'ancienne signature par nombre de caractères est remplacée en interne ; export conservé si nécessaire.
 
-`GRANT ... TO authenticated`, `GRANT ALL TO service_role`, RLS activée, politiques admin-only via `has_role(auth.uid(),'admin')` (mêmes règles que `invoices`).
+### 4. `src/lib/invoices.server.ts`
 
-### Compteur et RPC
+- Importe `ArtisanInfo` depuis `artisan.server.ts` ; garde les réexports existants.
+- `generateInvoicePdf` passe `clientBlockLabel` et `documentTypeLabel = "Facture"`, `legal` depuis la config serveur (fallback sur `artisan.legal` du snapshot pour les documents anciens).
 
-- `public.quote_counter(year, last_number)` (même modèle que `invoice_counter`).
-- `public.create_quote_for_idempotency(...)` `SECURITY DEFINER` : vérifie le rôle admin, retourne le devis existant si la clé existe (`reused=true`), sinon réserve atomiquement `DEV-YYYY-XXXX` et insère la ligne en `status='generating'`. Retourne `(quote_id, quote_number, reused)`. `GRANT EXECUTE TO authenticated`.
+### 5. `src/lib/quotes.server.ts`
 
-## 2. Mutualisation avec les factures
+- `QUOTE_NOTICE` / `QUOTE_LEGAL` deviennent de simples réexports lisant `document-config.server.ts` (aucun texte commercial en dur dans le moteur).
+- Passe `clientBlockLabel = "Devis adressé à"`, `documentTypeLabel = "Devis"`, `signatureBlock` avec libellé configurable.
 
-Extraction dans un nouveau `src/lib/documents.server.ts` (server-only), utilisé par factures **et** devis :
+### 6. `src/lib/invoices.functions.ts`
 
-- `computeTotals`, `round2`, `formatEUR`, `formatDateFR`, types `DocumentLine`/`Totals` (déplacés depuis `invoices.server.ts`, réexportés pour ne rien casser).
-- `drawDocumentHeader()` — en-tête artisan + bloc titre paramétrable (`title`, `numberLabel`, lignes méta à droite).
-- `drawLinesTable()` — tableau des prestations identique.
-- `drawTotalsBlock()` — Total HT / TVA par taux / Total TTC.
-- `drawFooter()` — IBAN/BIC + mentions légales passées en paramètre.
-- `uploadDocumentPdf(path, bytes)` et `bytesToBase64` (déplacé depuis `invoices.functions.ts` vers un helper partagé).
+- Suppression des définitions locales `round2` et `bytesToBase64` ; import des versions partagées (comme le fait déjà `quotes.functions.ts`).
 
-Réutilisés sans copie : `src/lib/artisan.server.ts` (`buildArtisanSnapshot`), `src/lib/invoice-email.server.ts` renommé conceptuellement en envoi générique `sendDocumentEmail` (même fichier, signature élargie, alias `sendInvoiceEmail` conservé), bucket privé `request-attachments`.
+### 7. `src/lib/quotes.functions.ts`
 
-`src/lib/invoices.server.ts` est refactorisé pour appeler ces primitives — le rendu PDF facture reste visuellement identique.
+- Ajustement d'imports uniquement si le renommage des constantes l'impose.
 
-## 3. Spécifique aux devis
+## Vérifications
 
-- `src/lib/quotes.server.ts` : `generateQuotePdf()` — titre « DEVIS », `N° DEV-YYYY-XXXX`, date du devis, `Valable jusqu'au JJ/MM/AAAA`, bloc notes/conditions particulières, mentions légales devis (« Devis gratuit et sans engagement. Bon pour accord, date et signature. Prix fermes pendant la durée de validité. TVA applicable selon la nature des travaux. »), et la mention explicite « Ce document est un devis et ne constitue pas une facture. », Mentions légales configurables coté serveur.
-- `src/lib/email-templates/quote-document-client.tsx` et `quote-document-artisan.tsx` : e-mails avec nom du client, numéro, date, validité, montant TTC, invitation à répondre à l'e-mail pour accepter ou demander une modification. Enregistrés dans `registry.ts`.
-- Numérotation, statut, libellés PDF : propres aux devis.
+Script de génération hors-ligne (`/tmp`) appelant directement le moteur, puis contrôle visuel via `pdftoppm` :
 
-## 4. Server functions — `src/lib/quotes.functions.ts`
+Factures : 1 ligne · plusieurs taux de TVA · description longue · 20–50 lignes (multi-pages) · avec/sans téléphone client · avec/sans IBAN-BIC.
 
-- `generateQuote` (`requireSupabaseAuth` + contrôle admin + Zod) :
-  1. Zod : coordonnées client, `quote_date`, `valid_until`, `notes` (max 1000), `lines` (1..50), `quote_request_id` uuid optionnel, `idempotency_key` uuid. Aucune donnée artisan reçue du navigateur.
-  2. Totaux calculés côté serveur.
-  3. `artisan_snapshot` construit côté serveur.
-  4. RPC `create_quote_for_idempotency` → `{quoteId, quoteNumber, reused}`.
-  5. `reused` : renvoie le PDF stocké ; si absent, régénération depuis `quotes` + `quote_lines` + `artisan_snapshot`, sans nouveau numéro. Pas de renvoi d'e-mail automatique.
-  6. Sinon : insert des lignes → PDF → upload `quotes/YYYY/DEV-YYYY-XXXX.pdf` → `status='ready'`. Toute erreur ⇒ `generation_failed` + `generation_error`, devis et numéro conservés.
-  7. E-mails : `status='sending'`, envoi client puis persistance immédiate du statut, puis artisan idem, vérification des erreurs Supabase ; statut global `sent` / `partially_sent` / `send_failed` ; `pending` jamais converti en `failed`. Clés Resend `quote/<quoteId>/client/v1` et `quote/<quoteId>/artisan/v1`.
-  8. Erreurs fournisseur loguées côté serveur, message générique renvoyé au navigateur.
-- `getQuoteForRequest({ quoteRequestId })` : renvoie le devis existant (numéro, statut, totaux, date d'envoi).
-- `getQuotePdfSignedUrl({ quoteId })` : URL signée 10 min, admin-only.
-- `resendQuoteEmail({ quoteId })` : réutilise le PDF stocké, renvoie au client, met à jour les statuts (pas de nouveau devis).
+Devis : simple · avec notes · description longue · multi-pages · plusieurs taux de TVA · zone de signature · mentions légales longues.
 
-`listQuotes` (`src/lib/admin.functions.ts`) est étendu pour joindre le devis associé (numéro + statut) à chaque demande.
+Contrôles par document : aucune ligne coupée, aucun texte hors page, en-tête de tableau répété, totaux groupés et visibles, footer lisible, libellé client correct, titre + numéro corrects, PDF ouvrable. Les scénarios réellement vérifiés seront listés à la fin.
 
-## 5. Interface admin
+## Contraintes respectées
 
-### `/admin/devis` (modifié)
-
-- Nouvelle colonne **Actions** (desktop) et bloc équivalent en carte mobile, dans le style actuel.
-- Demande non traitée : bouton **Traiter** → navigation vers `/admin/devis/$id`.
-- Demande déjà traitée : badge numéro + statut du devis, puis **Voir**, **Télécharger**, **Renvoyer**.
-- Le bouton Supprimer existant reste en place ; la demande d'origine n'est jamais réinitialisée.
-
-### `/admin/devis/$id` (nouvelle page)
-
-Réutilise les composants d'édition de `/admin/factures` (extraits dans `src/components/admin/LineItemsEditor.tsx` + `ClientFieldsForm.tsx`, réutilisés par les deux pages sans changement visuel) :
-
-- Rappel en lecture seule de la demande (service, description, date, pièces jointes éventuelles).
-- Coordonnées client pré-remplies depuis la demande, éditables.
-- Éditeur de lignes (type / description / PU HT / quantité / TVA), ajout et suppression.
-- Date du devis (aujourd'hui par défaut) et validité (30 jours par défaut, date modifiable).
-- Champ notes / conditions particulières.
-- Totaux HT / TVA / TTC calculés en direct.
-- Bouton « Générer et envoyer » : `Loader2` + bouton désactivé pendant le traitement, toast de succès, toast distinct si PDF généré mais e-mail échoué, téléchargement local du PDF, retour à la liste et mise à jour de la ligne (invalidation de la query `["admin","quotes"]`).
-
-## 6. Idempotence et reprise
-
-- Clé UUID générée à l'ouverture de la page d'édition, conservée tant que l'envoi n'est pas totalement réussi ⇒ double-clic ou retry réseau réutilisent le même devis (`reused=true`).
-- Numéro attribué atomiquement dans la RPC, jamais réattribué.
-- Échec PDF ⇒ `generation_failed`, un nouveau clic reprend le même devis.
-- Échec e-mail ⇒ devis conservé en `send_failed` / `partially_sent`, action **Renvoyer** disponible depuis la liste.
-
-## Fichiers
-
-**Nouveaux** : migration SQL, `src/lib/documents.server.ts`, `src/lib/quotes.server.ts`, `src/lib/quotes.functions.ts`, `src/routes/admin/devis.$id.tsx`, `src/components/admin/LineItemsEditor.tsx`, `src/components/admin/ClientFieldsForm.tsx`, 2 templates e-mail devis.
-
-**Modifiés** : `src/lib/invoices.server.ts` (utilise les primitives partagées), `src/lib/invoices.functions.ts` (helpers mutualisés), `src/lib/invoice-email.server.ts` (envoi générique), `src/lib/email-templates/registry.ts`, `src/lib/admin.functions.ts`, `src/routes/admin/devis.tsx`, `src/routes/admin/factures.tsx` (réutilisation des composants extraits, rendu inchangé).
-
-## Hors scope
-
-Interface de gestion `accepted` / `refused` / `expired` (schéma prêt), conversion devis → facture, historique des devis.
+Aucun changement de statuts, RPC, idempotence, envoi d'e-mails, tables, ni du design du dashboard. Un seul moteur PDF (`documents.server.ts`). Les informations artisan restent strictement serveur.
