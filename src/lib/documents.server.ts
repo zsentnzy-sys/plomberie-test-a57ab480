@@ -333,35 +333,46 @@ function drawDocumentLine(ctx: Ctx, l: DocumentLine): void {
 function drawTotalsBlock(ctx: Ctx): void {
   const t = ctx.params.totals;
   // Height: Total HT + one row per TVA rate + Total TVA + highlighted TTC box.
-  const h = 14 * (2 + t.tvaByRate.length) + 28;
+  const h = 14 * (2 + t.tvaByRate.length) + 34;
   ensureSpace(ctx, h + 10);
   ctx.y -= 10;
 
   const totX = ctx.width - M - 220;
-  const valX = ctx.width - M - 55;
+  const rightX = ctx.width - M - 6;
+  // Right-align amounts so long values can never overflow the page.
+  const amount = (
+    text: string,
+    size: number,
+    font: PDFFont,
+    color?: ReturnType<typeof rgb>,
+  ) => {
+    const w = font.widthOfTextAtSize(sanitize(text), size);
+    draw(ctx, text, rightX - w, ctx.y, { size, font, color });
+  };
+
   draw(ctx, "Total HT", totX, ctx.y, { size: 10, color: COLORS.muted });
-  draw(ctx, formatEUR(t.totalHT), valX, ctx.y, { size: 10 });
+  amount(formatEUR(t.totalHT), 10, ctx.font);
   ctx.y -= 14;
   for (const r of t.tvaByRate) {
     draw(ctx, `TVA ${r.rate}% (base ${formatEUR(r.base)})`, totX, ctx.y, {
       size: 10,
       color: COLORS.muted,
     });
-    draw(ctx, formatEUR(r.amount), valX, ctx.y, { size: 10 });
+    amount(formatEUR(r.amount), 10, ctx.font);
     ctx.y -= 14;
   }
   draw(ctx, "Total TVA", totX, ctx.y, { size: 10, color: COLORS.muted });
-  draw(ctx, formatEUR(t.totalTVA), valX, ctx.y, { size: 10 });
-  ctx.y -= 14;
+  amount(formatEUR(t.totalTVA), 10, ctx.font);
+  ctx.y -= 20;
   ctx.page.drawRectangle({
     x: totX - 6,
     y: ctx.y - 6,
-    width: valX - totX + 60,
+    width: ctx.width - M - (totX - 6),
     height: 22,
     color: COLORS.teal,
   });
   draw(ctx, "Total TTC", totX, ctx.y, { font: ctx.bold, size: 11, color: COLORS.white });
-  draw(ctx, formatEUR(t.totalTTC), valX, ctx.y, { font: ctx.bold, size: 11, color: COLORS.white });
+  amount(formatEUR(t.totalTTC), 11, ctx.bold, COLORS.white);
   ctx.y -= 40;
 }
 
