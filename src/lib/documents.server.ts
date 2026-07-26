@@ -251,21 +251,41 @@ function drawPageHeader(ctx: Ctx): void {
 
 function drawClientBlock(ctx: Ctx): void {
   const { client, clientBlockLabel, notice } = ctx.params;
+  const addrWidth = ctx.width - 2 * M - 180;
+
+  // Pre-wrap everything so the block height is known before drawing.
+  const nameLines = wrapByWidth(client.name, ctx.bold, 11, addrWidth);
+  const addressLines = client.address
+    .split("\n")
+    .flatMap((raw) => (raw.trim() ? wrapByWidth(raw, ctx.font, 10, addrWidth) : [""]));
+  const emailLines = client.email ? wrapByWidth(client.email, ctx.font, 10, addrWidth) : [];
+  const phoneLines = client.phone ? wrapByWidth(client.phone, ctx.font, 10, addrWidth) : [];
+
+  const blockH =
+    14 +
+    nameLines.length * 13 +
+    (addressLines.length + emailLines.length + phoneLines.length) * 12 +
+    14;
+  // Keep the identity block together when it fits; the per-line guards below
+  // still cover blocks taller than a full page.
+  ensureSpace(ctx, blockH);
+
+  ensureSpace(ctx, 14);
   draw(ctx, clientBlockLabel, M, ctx.y, { font: ctx.bold, size: 11, color: COLORS.navy });
   ctx.y -= 14;
-  draw(ctx, client.name, M, ctx.y, { size: 11, font: ctx.bold });
-  ctx.y -= 13;
-  const addrWidth = ctx.width - 2 * M - 180;
-  for (const raw of client.address.split("\n")) {
-    for (const line of wrapByWidth(raw, ctx.font, 10, addrWidth)) {
-      draw(ctx, line, M, ctx.y, { size: 10 });
-      ctx.y -= 12;
-    }
+  for (const line of nameLines) {
+    ensureSpace(ctx, 13);
+    draw(ctx, line, M, ctx.y, { size: 11, font: ctx.bold });
+    ctx.y -= 13;
   }
-  draw(ctx, client.email, M, ctx.y, { size: 10, color: COLORS.muted });
-  ctx.y -= 12;
-  if (client.phone) {
-    draw(ctx, client.phone, M, ctx.y, { size: 10, color: COLORS.muted });
+  for (const line of addressLines) {
+    ensureSpace(ctx, 12);
+    draw(ctx, line, M, ctx.y, { size: 10 });
+    ctx.y -= 12;
+  }
+  for (const line of [...emailLines, ...phoneLines]) {
+    ensureSpace(ctx, 12);
+    draw(ctx, line, M, ctx.y, { size: 10, color: COLORS.muted });
     ctx.y -= 12;
   }
   ctx.y -= 14;
@@ -403,9 +423,19 @@ function drawNotesBlock(ctx: Ctx): void {
 function drawFooterBlock(ctx: Ctx): void {
   const { artisan, footerLines, legal } = ctx.params;
   const maxW = ctx.width - 2 * M;
+  const wrappedFooter = (footerLines ?? []).flatMap((line) =>
+    wrapByWidth(line, ctx.font, 9, maxW),
+  );
+  const ibanText = artisan.iban
+    ? `IBAN : ${artisan.iban}${artisan.bic ? `  ·  BIC : ${artisan.bic}` : ""}`
+    : null;
+  const wrappedIban = ibanText ? wrapByWidth(ibanText, ctx.font, 9, maxW) : [];
   const legalLines = wrapByWidth(legal, ctx.font, 8, maxW);
   const firstChunk =
-    16 + (footerLines?.length ?? 0) * 12 + (artisan.iban ? 12 : 0) + Math.min(legalLines.length, 2) * 10;
+    16 +
+    wrappedFooter.length * 12 +
+    wrappedIban.length * 12 +
+    Math.min(legalLines.length, 2) * 10;
   ensureSpace(ctx, firstChunk);
 
   ctx.page.drawLine({
@@ -415,20 +445,10 @@ function drawFooterBlock(ctx: Ctx): void {
     color: COLORS.border,
   });
   ctx.y -= 16;
-  for (const line of footerLines ?? []) {
-    for (const l of wrapByWidth(line, ctx.font, 9, maxW)) {
-      ensureSpace(ctx, 12);
-      draw(ctx, l, M, ctx.y, { size: 9, color: COLORS.muted });
-      ctx.y -= 12;
-    }
-  }
-  if (artisan.iban) {
-    const ibanText = `IBAN : ${artisan.iban}${artisan.bic ? `  ·  BIC : ${artisan.bic}` : ""}`;
-    for (const l of wrapByWidth(ibanText, ctx.font, 9, maxW)) {
-      ensureSpace(ctx, 12);
-      draw(ctx, l, M, ctx.y, { size: 9, color: COLORS.muted });
-      ctx.y -= 12;
-    }
+  for (const l of [...wrappedFooter, ...wrappedIban]) {
+    ensureSpace(ctx, 12);
+    draw(ctx, l, M, ctx.y, { size: 9, color: COLORS.muted });
+    ctx.y -= 12;
   }
   for (const line of legalLines) {
     ensureSpace(ctx, 10);
