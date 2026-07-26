@@ -2,77 +2,21 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Json } from "@/integrations/supabase/types";
+import { quoteSchema } from "./quotes.schemas";
+import type { QuoteEmailStatus, QuoteGlobalStatus, GenerateQuoteResult } from "./quotes.types";
 
-const lineSchema = z.object({
-  type: z.enum(["Service", "Matériel", "Taux horaire"]),
-  description: z.string().trim().min(1, "Description requise").max(300),
-  unit_price_ht: z.number().min(0).max(1_000_000),
-  quantity: z.number().min(0.01).max(10_000),
-  tva: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]),
-});
-
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide (YYYY-MM-DD)");
-
-const quoteSchema = z
-  .object({
-    quote_request_id: z.string().uuid().optional(),
-    client_name: z.string().trim().min(2, "Nom requis").max(120),
-    client_address: z.string().trim().min(4, "Adresse requise").max(400),
-    client_email: z.string().trim().email("Email invalide").max(255),
-    client_phone: z.string().trim().max(30).optional().or(z.literal("")),
-    quote_date: isoDate,
-    valid_until: isoDate,
-    notes: z.string().trim().max(1000).optional().or(z.literal("")),
-    lines: z.array(lineSchema).min(1, "Ajoutez au moins une ligne").max(50),
-    idempotency_key: z.string().uuid("Clé d'idempotence invalide"),
-  })
-  .refine((d) => d.valid_until >= d.quote_date, {
-    message: "La date de validité doit être postérieure à la date du devis",
-    path: ["valid_until"],
-  });
-
-export type QuoteEmailStatus = "sent" | "failed" | "pending";
-export interface QuoteEmailResult {
-  status: QuoteEmailStatus;
-  error?: string;
-}
-export type QuoteGlobalStatus =
-  | "generating"
-  | "generation_failed"
-  | "ready"
-  | "sending"
-  | "sent"
-  | "partially_sent"
-  | "send_failed"
-  | "accepted"
-  | "refused"
-  | "expired"
-  | "cancelled";
-
-export interface GenerateQuoteResult {
-  quoteId: string;
-  quoteNumber: string;
-  pdfBase64: string;
-  totals: { totalHT: number; totalTVA: number; totalTTC: number };
-  emailClient: QuoteEmailResult;
-  emailArtisan: QuoteEmailResult;
-  reused: boolean;
-  status: QuoteGlobalStatus;
-}
-
-async function assertAdmin(context: { supabase: any; userId: string }) {
-  const { data: isAdmin, error } = await context.supabase.rpc("has_role", {
-    _user_id: context.userId,
-    _role: "admin",
-  });
-  if (error) throw new Error("Vérification du rôle impossible.");
-  if (!isAdmin) throw new Error("Accès refusé.");
-}
+export type {
+  QuoteEmailStatus,
+  QuoteEmailResult,
+  QuoteGlobalStatus,
+  GenerateQuoteResult,
+} from "./quotes.types";
 
 export const generateQuote = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => quoteSchema.parse(data))
   .handler(async ({ data, context }): Promise<GenerateQuoteResult> => {
+    const { assertAdmin } = await import("@/lib/quotes.guards.server");
     await assertAdmin(context);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -280,6 +224,7 @@ export const generateQuote = createServerFn({ method: "POST" })
       totalTTC: formatEUR(totals.totalTTC),
     };
 
+    const { sendQuoteEmails } = await import("@/lib/quotes-email.server");
     const { emailClient, emailArtisan, status } = await sendQuoteEmails({
       quoteId,
       quoteNo,
@@ -317,6 +262,7 @@ export const resendQuoteEmail = createServerFn({ method: "POST" })
     z.object({ quoteId: z.string().uuid() }).parse(data),
   )
   .handler(async ({ data, context }) => {
+    const { assertAdmin } = await import("@/lib/quotes.guards.server");
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { bytesToBase64, formatEUR, formatDateFR } = await import(
@@ -337,6 +283,7 @@ export const resendQuoteEmail = createServerFn({ method: "POST" })
     if (dl.error || !dl.data) throw new Error("PDF indisponible : régénérez le devis.");
     const pdfBase64 = bytesToBase64(new Uint8Array(await dl.data.arrayBuffer()));
 
+    const { sendQuoteEmails } = await import("@/lib/quotes-email.server");
     const result = await sendQuoteEmails({
       quoteId: q.id,
       quoteNo: q.quote_number,
@@ -374,6 +321,7 @@ export const getQuotePdfSignedUrl = createServerFn({ method: "POST" })
     z.object({ quoteId: z.string().uuid() }).parse(data),
   )
   .handler(async ({ data, context }) => {
+    const { assertAdmin } = await import("@/lib/quotes.guards.server");
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: row, error } = await supabaseAdmin
@@ -400,6 +348,7 @@ export const getQuoteRequestDetail = createServerFn({ method: "POST" })
     z.object({ requestId: z.string().uuid() }).parse(data),
   )
   .handler(async ({ data, context }) => {
+    const { assertAdmin } = await import("@/lib/quotes.guards.server");
     await assertAdmin(context);
     const { data: request, error } = await context.supabase
       .from("quote_requests")
