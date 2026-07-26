@@ -1,7 +1,11 @@
 // Server-only shared primitives for commercial documents (invoices & quotes).
 // Both PDFs are produced by the same renderer so they share identity, header,
-// table, totals and footer layout. Only labels/meta/legal differ.
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from "@cantoo/pdf-lib";
+// table, totals and footer layout. Only labels/meta/legal differ — no business
+// or legal sentence is hardcoded here (see document-config.server.ts).
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
+import type { ArtisanInfo } from "./artisan.server";
+
+export type { ArtisanInfo };
 
 export type DocumentLineType = "Service" | "Matériel" | "Taux horaire";
 export const TVA_RATES = [0, 5.5, 10, 20] as const;
@@ -13,18 +17,6 @@ export interface DocumentLine {
   unit_price_ht: number;
   quantity: number;
   tva: TvaRate;
-}
-
-export interface ArtisanInfo {
-  company: string;
-  fullName: string;
-  address: string;
-  phone: string;
-  email: string;
-  siret: string;
-  iban?: string;
-  bic?: string;
-  legal: string;
 }
 
 export interface DocumentTotals {
@@ -106,6 +98,12 @@ export interface RenderDocumentParams {
   documentNumber: string;
   artisan: ArtisanInfo;
   client: DocumentClient;
+  /** Label above the client identity block, e.g. "Facturé à". */
+  clientBlockLabel: string;
+  /** Short type label used on continuation pages, e.g. "Facture". */
+  documentTypeLabel?: string;
+  /** Suffix used on continuation pages, default "(suite)". */
+  continuationLabel?: string;
   /** Right-hand meta rows under the number (label already included). */
   metaLines: string[];
   lines: DocumentLine[];
@@ -118,101 +116,45 @@ export interface RenderDocumentParams {
   footerLines?: string[];
   /** Legal mentions specific to the document type. */
   legal: string;
-  /** Show a "Bon pour accord" signature area (quotes). */
+  /** Show a signature area (quotes). */
   signatureBlock?: boolean;
+  /** Label of the signature area; required when signatureBlock is set. */
+  signatureLabel?: string;
 }
 
-export async function renderDocumentPdf(
-  params: RenderDocumentParams,
-): Promise<Uint8Array> {
-  const { title, documentNumber, artisan, client, metaLines, totals } = params;
-  const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
-  let page = doc.addPage([595.28, 841.89]); // A4
-  const { width, height } = page.getSize();
-  const M = 40;
-  let y = height - M;
+// ---------------------------------------------------------------------------
+// Rendering context
+// ---------------------------------------------------------------------------
 
-  const navy = rgb(0.12, 0.16, 0.22);
-  const teal = rgb(0.11, 0.64, 0.68);
-  const muted = rgb(0.4, 0.45, 0.5);
-  const border = rgb(0.85, 0.87, 0.9);
-  const black = rgb(0, 0, 0);
+const PAGE_W = 595.28;
+const PAGE_H = 841.89;
+const M = 40;
+const BOTTOM = 50;
 
-  const draw = (
-    text: string,
-    x: number,
-    yy: number,
-    opts: { font?: PDFFont; size?: number; color?: ReturnType<typeof rgb> } = {},
-  ) => {
-    page.drawText(sanitize(text), {
-      x,
-      y: yy,
-      size: opts.size ?? 10,
-      font: opts.font ?? font,
-      color: opts.color ?? black,
-    });
-  };
+const COLORS = {
+  navy: rgb(0.12, 0.16, 0.22),
+  teal: rgb(0.11, 0.64, 0.68),
+  muted: rgb(0.4, 0.45, 0.5),
+  border: rgb(0.85, 0.87, 0.9),
+  black: rgb(0, 0, 0),
+  white: rgb(1, 1, 1),
+  tableHead: rgb(0.96, 0.97, 0.98),
+};
 
-  // ---- Header: artisan identity
-  draw(artisan.company, M, y, { font: fontBold, size: 18, color: navy });
-  y -= 22;
-  draw(artisan.fullName, M, y, { size: 10, color: muted });
-  y -= 14;
-  for (const line of artisan.address.split("\n")) {
-    draw(line, M, y, { size: 10, color: muted });
-    y -= 12;
-  }
-  draw(`Tél. ${artisan.phone}  ·  ${artisan.email}`, M, y, { size: 10, color: muted });
-  y -= 12;
-  draw(artisan.siret, M, y, { size: 10, color: muted });
+interface Ctx {
+  doc: PDFDocument;
+  page: PDFPage;
+  y: number;
+  font: PDFFont;
+  bold: PDFFont;
+  width: number;
+  height: number;
+  params: RenderDocumentParams;
+  cols: ReturnType<typeof buildCols>;
+}
 
-  // ---- Header: document title block (right)
-  let ry = height - M;
-  draw(title, width - M - 140, ry, { font: fontBold, size: 22, color: teal });
-  ry -= 26;
-  draw(`N° ${documentNumber}`, width - M - 140, ry, {
-    font: fontBold,
-    size: 11,
-    color: navy,
-  });
-  for (const meta of metaLines) {
-    ry -= 14;
-    draw(meta, width - M - 140, ry, { size: 10, color: muted });
-  }
-
-  y -= 30;
-  page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 0.5, color: border });
-  y -= 20;
-
-  // ---- Client block
-  draw("Facturé à", M, y, { font: fontBold, size: 11, color: navy });
-  y -= 14;
-  draw(client.name, M, y, { size: 11, font: fontBold });
-  y -= 13;
-  for (const line of client.address.split("\n")) {
-    draw(line, M, y, { size: 10 });
-    y -= 12;
-  }
-  draw(client.email, M, y, { size: 10, color: muted });
-  y -= 12;
-  if (client.phone) {
-    draw(client.phone, M, y, { size: 10, color: muted });
-    y -= 12;
-  }
-  y -= 14;
-
-  if (params.notice) {
-    for (const line of wrapText(params.notice, 95)) {
-      draw(line, M, y, { size: 9, font: fontBold, color: teal });
-      y -= 12;
-    }
-    y -= 6;
-  }
-
-  // ---- Lines table
-  const cols = {
+function buildCols(width: number) {
+  return {
     type: M,
     desc: M + 70,
     qty: width - M - 210,
@@ -220,134 +162,323 @@ export async function renderDocumentPdf(
     tva: width - M - 90,
     ttc: width - M - 55,
   };
-  page.drawRectangle({
-    x: M,
-    y: y - 4,
-    width: width - 2 * M,
-    height: 20,
-    color: rgb(0.96, 0.97, 0.98),
+}
+
+function draw(
+  ctx: Ctx,
+  text: string,
+  x: number,
+  yy: number,
+  opts: { font?: PDFFont; size?: number; color?: ReturnType<typeof rgb> } = {},
+) {
+  ctx.page.drawText(sanitize(text), {
+    x,
+    y: yy,
+    size: opts.size ?? 10,
+    font: opts.font ?? ctx.font,
+    color: opts.color ?? COLORS.black,
   });
-  const th = y + 4;
-  draw("Type", cols.type + 4, th, { font: fontBold, size: 9, color: navy });
-  draw("Description", cols.desc + 4, th, { font: fontBold, size: 9, color: navy });
-  draw("Qté", cols.qty, th, { font: fontBold, size: 9, color: navy });
-  draw("PU HT", cols.pu, th, { font: fontBold, size: 9, color: navy });
-  draw("TVA", cols.tva, th, { font: fontBold, size: 9, color: navy });
-  draw("TTC", cols.ttc, th, { font: fontBold, size: 9, color: navy });
-  y -= 22;
+}
 
-  for (const l of params.lines) {
-    if (y < 150) {
-      page = doc.addPage([595.28, 841.89]);
-      y = height - M;
+/** Remaining vertical space above the bottom margin. */
+function remaining(ctx: Ctx): number {
+  return ctx.y - BOTTOM;
+}
+
+/** Start a fresh continuation page with a discreet document reminder. */
+function addContinuationPage(ctx: Ctx): void {
+  ctx.page = ctx.doc.addPage([PAGE_W, PAGE_H]);
+  ctx.y = ctx.height - M;
+  const { documentTypeLabel, title, documentNumber, continuationLabel } = ctx.params;
+  const label = `${documentTypeLabel ?? title} N° ${documentNumber} — ${continuationLabel ?? "(suite)"}`;
+  draw(ctx, label, M, ctx.y, { size: 9, color: COLORS.muted });
+  ctx.y -= 12;
+  ctx.page.drawLine({
+    start: { x: M, y: ctx.y },
+    end: { x: ctx.width - M, y: ctx.y },
+    thickness: 0.5,
+    color: COLORS.border,
+  });
+  ctx.y -= 18;
+}
+
+/** Ensure `h` points are available, otherwise break to a new page. */
+function ensureSpace(ctx: Ctx, h: number): void {
+  if (remaining(ctx) < h) addContinuationPage(ctx);
+}
+
+// ---------------------------------------------------------------------------
+// Blocks
+// ---------------------------------------------------------------------------
+
+function drawPageHeader(ctx: Ctx): void {
+  const { artisan, title, documentNumber, metaLines } = ctx.params;
+  draw(ctx, artisan.company, M, ctx.y, { font: ctx.bold, size: 18, color: COLORS.navy });
+  ctx.y -= 22;
+  draw(ctx, artisan.fullName, M, ctx.y, { size: 10, color: COLORS.muted });
+  ctx.y -= 14;
+  for (const line of artisan.address.split("\n")) {
+    draw(ctx, line, M, ctx.y, { size: 10, color: COLORS.muted });
+    ctx.y -= 12;
+  }
+  draw(ctx, `Tél. ${artisan.phone}  ·  ${artisan.email}`, M, ctx.y, {
+    size: 10,
+    color: COLORS.muted,
+  });
+  ctx.y -= 12;
+  draw(ctx, artisan.siret, M, ctx.y, { size: 10, color: COLORS.muted });
+
+  // Right-hand title block
+  const rx = ctx.width - M - 140;
+  let ry = ctx.height - M;
+  draw(ctx, title, rx, ry, { font: ctx.bold, size: 22, color: COLORS.teal });
+  ry -= 26;
+  draw(ctx, `N° ${documentNumber}`, rx, ry, { font: ctx.bold, size: 11, color: COLORS.navy });
+  for (const meta of metaLines) {
+    ry -= 14;
+    draw(ctx, meta, rx, ry, { size: 10, color: COLORS.muted });
+  }
+
+  ctx.y = Math.min(ctx.y, ry) - 30;
+  ctx.page.drawLine({
+    start: { x: M, y: ctx.y },
+    end: { x: ctx.width - M, y: ctx.y },
+    thickness: 0.5,
+    color: COLORS.border,
+  });
+  ctx.y -= 20;
+}
+
+function drawClientBlock(ctx: Ctx): void {
+  const { client, clientBlockLabel, notice } = ctx.params;
+  draw(ctx, clientBlockLabel, M, ctx.y, { font: ctx.bold, size: 11, color: COLORS.navy });
+  ctx.y -= 14;
+  draw(ctx, client.name, M, ctx.y, { size: 11, font: ctx.bold });
+  ctx.y -= 13;
+  const addrWidth = ctx.width - 2 * M - 180;
+  for (const raw of client.address.split("\n")) {
+    for (const line of wrapByWidth(raw, ctx.font, 10, addrWidth)) {
+      draw(ctx, line, M, ctx.y, { size: 10 });
+      ctx.y -= 12;
     }
-    const ht = l.unit_price_ht * l.quantity;
-    const ttc = ht * (1 + l.tva / 100);
-    const descLines = wrapText(l.description || "-", 55);
-    const rowH = Math.max(14, descLines.length * 12);
-    draw(l.type, cols.type + 4, y, { size: 9 });
-    descLines.forEach((dl, i) => draw(dl, cols.desc + 4, y - i * 12, { size: 9 }));
-    draw(String(l.quantity), cols.qty, y, { size: 9 });
-    draw(formatEUR(l.unit_price_ht), cols.pu, y, { size: 9 });
-    draw(`${l.tva}%`, cols.tva, y, { size: 9 });
-    draw(formatEUR(round2(ttc)), cols.ttc, y, { size: 9 });
-    y -= rowH + 4;
-    page.drawLine({
-      start: { x: M, y: y + 2 },
-      end: { x: width - M, y: y + 2 },
-      thickness: 0.3,
-      color: border,
-    });
-    y -= 6;
+  }
+  draw(ctx, client.email, M, ctx.y, { size: 10, color: COLORS.muted });
+  ctx.y -= 12;
+  if (client.phone) {
+    draw(ctx, client.phone, M, ctx.y, { size: 10, color: COLORS.muted });
+    ctx.y -= 12;
+  }
+  ctx.y -= 14;
+
+  if (notice) {
+    const lines = wrapByWidth(notice, ctx.bold, 9, ctx.width - 2 * M);
+    ensureSpace(ctx, lines.length * 12 + 6);
+    for (const line of lines) {
+      draw(ctx, line, M, ctx.y, { size: 9, font: ctx.bold, color: COLORS.teal });
+      ctx.y -= 12;
+    }
+    ctx.y -= 6;
+  }
+}
+
+function drawTableHeader(ctx: Ctx): void {
+  const c = ctx.cols;
+  ctx.page.drawRectangle({
+    x: M,
+    y: ctx.y - 4,
+    width: ctx.width - 2 * M,
+    height: 20,
+    color: COLORS.tableHead,
+  });
+  const th = ctx.y + 4;
+  draw(ctx, "Type", c.type + 4, th, { font: ctx.bold, size: 9, color: COLORS.navy });
+  draw(ctx, "Description", c.desc + 4, th, { font: ctx.bold, size: 9, color: COLORS.navy });
+  draw(ctx, "Qté", c.qty, th, { font: ctx.bold, size: 9, color: COLORS.navy });
+  draw(ctx, "PU HT", c.pu, th, { font: ctx.bold, size: 9, color: COLORS.navy });
+  draw(ctx, "TVA", c.tva, th, { font: ctx.bold, size: 9, color: COLORS.navy });
+  draw(ctx, "TTC", c.ttc, th, { font: ctx.bold, size: 9, color: COLORS.navy });
+  ctx.y -= 22;
+}
+
+function drawDocumentLine(ctx: Ctx, l: DocumentLine): void {
+  const c = ctx.cols;
+  const descWidth = c.qty - c.desc - 12;
+  const descLines = wrapByWidth(l.description || "-", ctx.font, 9, descWidth);
+  const rowH = Math.max(14, descLines.length * 12) + 10;
+
+  // Never split a row across pages: break first, then redraw table header.
+  if (remaining(ctx) < rowH) {
+    addContinuationPage(ctx);
+    drawTableHeader(ctx);
   }
 
-  y -= 10;
-  // ---- Totals
-  const totX = width - M - 220;
-  const valX = width - M - 55;
-  draw("Total HT", totX, y, { size: 10, color: muted });
-  draw(formatEUR(totals.totalHT), valX, y, { size: 10 });
-  y -= 14;
-  for (const r of totals.tvaByRate) {
-    draw(`TVA ${r.rate}% (base ${formatEUR(r.base)})`, totX, y, { size: 10, color: muted });
-    draw(formatEUR(r.amount), valX, y, { size: 10 });
-    y -= 14;
+  const ht = l.unit_price_ht * l.quantity;
+  const ttc = ht * (1 + l.tva / 100);
+  draw(ctx, l.type, c.type + 4, ctx.y, { size: 9 });
+  descLines.forEach((dl, i) => draw(ctx, dl, c.desc + 4, ctx.y - i * 12, { size: 9 }));
+  draw(ctx, String(l.quantity), c.qty, ctx.y, { size: 9 });
+  draw(ctx, formatEUR(l.unit_price_ht), c.pu, ctx.y, { size: 9 });
+  draw(ctx, `${l.tva}%`, c.tva, ctx.y, { size: 9 });
+  draw(ctx, formatEUR(round2(ttc)), c.ttc, ctx.y, { size: 9 });
+  ctx.y -= Math.max(14, descLines.length * 12) + 4;
+  ctx.page.drawLine({
+    start: { x: M, y: ctx.y + 2 },
+    end: { x: ctx.width - M, y: ctx.y + 2 },
+    thickness: 0.3,
+    color: COLORS.border,
+  });
+  ctx.y -= 6;
+}
+
+function drawTotalsBlock(ctx: Ctx): void {
+  const t = ctx.params.totals;
+  // Height: Total HT + one row per TVA rate + Total TVA + highlighted TTC box.
+  const h = 14 * (2 + t.tvaByRate.length) + 28;
+  ensureSpace(ctx, h + 10);
+  ctx.y -= 10;
+
+  const totX = ctx.width - M - 220;
+  const valX = ctx.width - M - 55;
+  draw(ctx, "Total HT", totX, ctx.y, { size: 10, color: COLORS.muted });
+  draw(ctx, formatEUR(t.totalHT), valX, ctx.y, { size: 10 });
+  ctx.y -= 14;
+  for (const r of t.tvaByRate) {
+    draw(ctx, `TVA ${r.rate}% (base ${formatEUR(r.base)})`, totX, ctx.y, {
+      size: 10,
+      color: COLORS.muted,
+    });
+    draw(ctx, formatEUR(r.amount), valX, ctx.y, { size: 10 });
+    ctx.y -= 14;
   }
-  draw("Total TVA", totX, y, { size: 10, color: muted });
-  draw(formatEUR(totals.totalTVA), valX, y, { size: 10 });
-  y -= 14;
-  page.drawRectangle({
+  draw(ctx, "Total TVA", totX, ctx.y, { size: 10, color: COLORS.muted });
+  draw(ctx, formatEUR(t.totalTVA), valX, ctx.y, { size: 10 });
+  ctx.y -= 14;
+  ctx.page.drawRectangle({
     x: totX - 6,
-    y: y - 6,
+    y: ctx.y - 6,
     width: valX - totX + 60,
     height: 22,
-    color: rgb(0.11, 0.64, 0.68),
+    color: COLORS.teal,
   });
-  draw("Total TTC", totX, y, { font: fontBold, size: 11, color: rgb(1, 1, 1) });
-  draw(formatEUR(totals.totalTTC), valX, y, { font: fontBold, size: 11, color: rgb(1, 1, 1) });
-  y -= 40;
+  draw(ctx, "Total TTC", totX, ctx.y, { font: ctx.bold, size: 11, color: COLORS.white });
+  draw(ctx, formatEUR(t.totalTTC), valX, ctx.y, { font: ctx.bold, size: 11, color: COLORS.white });
+  ctx.y -= 40;
+}
 
-  // ---- Optional notes
-  if (params.notes && params.notes.trim()) {
-    if (y < 140) {
-      page = doc.addPage([595.28, 841.89]);
-      y = height - M;
-    }
-    draw("Notes et conditions particulières", M, y, {
-      font: fontBold,
-      size: 10,
-      color: navy,
-    });
-    y -= 14;
-    for (const raw of params.notes.split("\n")) {
-      for (const line of wrapText(raw, 105)) {
-        draw(line, M, y, { size: 9, color: muted });
-        y -= 11;
-      }
-    }
-    y -= 12;
-  }
+function drawNotesBlock(ctx: Ctx): void {
+  const notes = ctx.params.notes;
+  if (!notes || !notes.trim()) return;
+  const maxW = ctx.width - 2 * M;
+  const paragraphs = notes
+    .split("\n")
+    .flatMap((raw) => (raw.trim() ? wrapByWidth(raw, ctx.font, 9, maxW) : [""]));
 
-  // ---- Footer
-  if (y < 120) {
-    page = doc.addPage([595.28, 841.89]);
-    y = height - M;
+  // Keep the title with at least its first two lines.
+  ensureSpace(ctx, 14 + Math.min(paragraphs.length, 2) * 11);
+  draw(ctx, "Notes et conditions particulières", M, ctx.y, {
+    font: ctx.bold,
+    size: 10,
+    color: COLORS.navy,
+  });
+  ctx.y -= 14;
+  for (const line of paragraphs) {
+    ensureSpace(ctx, 11);
+    draw(ctx, line, M, ctx.y, { size: 9, color: COLORS.muted });
+    ctx.y -= 11;
   }
-  page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 0.5, color: border });
-  y -= 16;
-  for (const line of params.footerLines ?? []) {
-    draw(line, M, y, { size: 9, color: muted });
-    y -= 12;
+  ctx.y -= 12;
+}
+
+function drawFooterBlock(ctx: Ctx): void {
+  const { artisan, footerLines, legal } = ctx.params;
+  const maxW = ctx.width - 2 * M;
+  const legalLines = wrapByWidth(legal, ctx.font, 8, maxW);
+  const firstChunk =
+    16 + (footerLines?.length ?? 0) * 12 + (artisan.iban ? 12 : 0) + Math.min(legalLines.length, 2) * 10;
+  ensureSpace(ctx, firstChunk);
+
+  ctx.page.drawLine({
+    start: { x: M, y: ctx.y },
+    end: { x: ctx.width - M, y: ctx.y },
+    thickness: 0.5,
+    color: COLORS.border,
+  });
+  ctx.y -= 16;
+  for (const line of footerLines ?? []) {
+    for (const l of wrapByWidth(line, ctx.font, 9, maxW)) {
+      ensureSpace(ctx, 12);
+      draw(ctx, l, M, ctx.y, { size: 9, color: COLORS.muted });
+      ctx.y -= 12;
+    }
   }
   if (artisan.iban) {
-    draw(`IBAN : ${artisan.iban}${artisan.bic ? `  ·  BIC : ${artisan.bic}` : ""}`, M, y, {
-      size: 9,
-      color: muted,
-    });
-    y -= 12;
+    const ibanText = `IBAN : ${artisan.iban}${artisan.bic ? `  ·  BIC : ${artisan.bic}` : ""}`;
+    for (const l of wrapByWidth(ibanText, ctx.font, 9, maxW)) {
+      ensureSpace(ctx, 12);
+      draw(ctx, l, M, ctx.y, { size: 9, color: COLORS.muted });
+      ctx.y -= 12;
+    }
   }
-  for (const line of wrapText(params.legal, 110)) {
-    draw(line, M, y, { size: 8, color: muted });
-    y -= 10;
+  for (const line of legalLines) {
+    ensureSpace(ctx, 10);
+    draw(ctx, line, M, ctx.y, { size: 8, color: COLORS.muted });
+    ctx.y -= 10;
   }
+}
 
-  if (params.signatureBlock) {
-    y -= 14;
-    draw("Bon pour accord — date et signature du client :", M, y, {
-      size: 9,
-      font: fontBold,
-      color: navy,
-    });
-    y -= 6;
-    page.drawRectangle({
-      x: M,
-      y: y - 46,
-      width: 240,
-      height: 46,
-      borderColor: border,
-      borderWidth: 0.7,
-    });
-  }
+function drawSignatureBlock(ctx: Ctx): void {
+  if (!ctx.params.signatureBlock) return;
+  const label = ctx.params.signatureLabel ?? "Date et signature du client :";
+  // Whole block (label + 46pt box) must fit on one page.
+  ensureSpace(ctx, 14 + 6 + 46 + 10);
+  ctx.y -= 14;
+  draw(ctx, label, M, ctx.y, { size: 9, font: ctx.bold, color: COLORS.navy });
+  ctx.y -= 6;
+  ctx.page.drawRectangle({
+    x: M,
+    y: ctx.y - 46,
+    width: 240,
+    height: 46,
+    borderColor: COLORS.border,
+    borderWidth: 0.7,
+  });
+  ctx.y -= 52;
+}
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+export async function renderDocumentPdf(
+  params: RenderDocumentParams,
+): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const page = doc.addPage([PAGE_W, PAGE_H]);
+  const { width, height } = page.getSize();
+
+  const ctx: Ctx = {
+    doc,
+    page,
+    y: height - M,
+    font,
+    bold,
+    width,
+    height,
+    params,
+    cols: buildCols(width),
+  };
+
+  drawPageHeader(ctx);
+  drawClientBlock(ctx);
+  ensureSpace(ctx, 60);
+  drawTableHeader(ctx);
+  for (const line of params.lines) drawDocumentLine(ctx, line);
+  drawTotalsBlock(ctx);
+  drawNotesBlock(ctx);
+  drawFooterBlock(ctx);
+  drawSignatureBlock(ctx);
 
   return await doc.save();
 }
@@ -361,20 +492,51 @@ function sanitize(s: string): string {
     .replace(/\u2022/g, "·");
 }
 
-export function wrapText(text: string, maxChars: number): string[] {
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
+/**
+ * Wrap text using the real glyph widths of the target font, so nothing can
+ * overflow the page. Very long words without spaces are hard-split.
+ */
+export function wrapByWidth(
+  text: string,
+  font: PDFFont,
+  size: number,
+  maxWidth: number,
+): string[] {
+  const measure = (s: string) => font.widthOfTextAtSize(sanitize(s), size);
+  const out: string[] = [];
   let cur = "";
-  for (const w of words) {
-    if ((cur + " " + w).trim().length > maxChars) {
-      if (cur) lines.push(cur);
-      cur = w;
+
+  const pushWordChunks = (word: string) => {
+    let chunk = "";
+    for (const ch of word) {
+      if (measure(chunk + ch) > maxWidth && chunk) {
+        out.push(chunk);
+        chunk = ch;
+      } else {
+        chunk += ch;
+      }
+    }
+    cur = chunk;
+  };
+
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const candidate = cur ? `${cur} ${word}` : word;
+    if (measure(candidate) <= maxWidth) {
+      cur = candidate;
+      continue;
+    }
+    if (cur) {
+      out.push(cur);
+      cur = "";
+    }
+    if (measure(word) <= maxWidth) {
+      cur = word;
     } else {
-      cur = (cur + " " + w).trim();
+      pushWordChunks(word);
     }
   }
-  if (cur) lines.push(cur);
-  return lines.length ? lines : [""];
+  if (cur) out.push(cur);
+  return out.length ? out : [""];
 }
 
 /** Upload a generated PDF to the private bucket (shared by invoices & quotes). */
