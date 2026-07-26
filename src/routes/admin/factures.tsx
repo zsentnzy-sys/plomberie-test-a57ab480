@@ -1,10 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
-import { Plus, Trash2, FileDown, Send, Loader2 } from "lucide-react";
+import { FileDown, Send, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { generateInvoice } from "@/lib/invoices.functions";
+import {
+  LineItemsEditor,
+  TotalsCard,
+  computeEditorTotals,
+  downloadBase64Pdf,
+  newLine,
+  parseNum,
+  type EditableLine,
+  type LineType,
+  type TvaRate,
+} from "@/components/admin/LineItemsEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,33 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type TvaRate = 0 | 5.5 | 10 | 20;
-type LineType = "Service" | "Matériel" | "Taux horaire";
 type Payment = "Carte bancaire" | "Virement bancaire" | "Chèque" | "Espèces";
-
-interface Line {
-  id: string;
-  type: LineType;
-  description: string;
-  unit_price_ht: string;
-  quantity: string;
-  tva: TvaRate;
-}
-
-function newLine(): Line {
-  return {
-    id: crypto.randomUUID(),
-    type: "Service",
-    description: "",
-    unit_price_ht: "",
-    quantity: "1",
-    tva: 20,
-  };
-}
-
-function fmtEUR(n: number): string {
-  return `${n.toFixed(2).replace(".", ",")} EUR`;
-}
 
 export const Route = createFileRoute("/admin/factures")({
   component: FacturesPage,
@@ -59,7 +44,7 @@ function FacturesPage() {
   const [invoiceDate, setInvoiceDate] = useState(
     new Date().toISOString().slice(0, 10),
   );
-  const [lines, setLines] = useState<Line[]>([newLine()]);
+  const [lines, setLines] = useState<EditableLine[]>([newLine()]);
   const [submitting, setSubmitting] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() =>
     crypto.randomUUID(),
@@ -70,29 +55,7 @@ function FacturesPage() {
 
   const submit = useServerFn(generateInvoice);
 
-  const totals = useMemo(() => {
-    let totalHT = 0;
-    let totalTVA = 0;
-    for (const l of lines) {
-      const pu = parseFloat(l.unit_price_ht.replace(",", ".")) || 0;
-      const qty = parseFloat(l.quantity.replace(",", ".")) || 0;
-      const ht = pu * qty;
-      totalHT += ht;
-      totalTVA += ht * (l.tva / 100);
-    }
-    return {
-      totalHT: Math.round(totalHT * 100) / 100,
-      totalTVA: Math.round(totalTVA * 100) / 100,
-      totalTTC: Math.round((totalHT + totalTVA) * 100) / 100,
-    };
-  }, [lines]);
-
-  function updateLine(id: string, patch: Partial<Line>) {
-    setLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
-  }
-  function removeLine(id: string) {
-    setLines((ls) => (ls.length === 1 ? ls : ls.filter((l) => l.id !== id)));
-  }
+  const totals = useMemo(() => computeEditorTotals(lines), [lines]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -105,8 +68,8 @@ function FacturesPage() {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clientEmail))
       return toast.error("Email du client invalide.");
     const parsedLines = lines.map((l) => {
-      const pu = parseFloat(l.unit_price_ht.replace(",", "."));
-      const qty = parseFloat(l.quantity.replace(",", "."));
+      const pu = parseNum(l.unit_price_ht);
+      const qty = parseNum(l.quantity);
       return {
         type: l.type,
         description: l.description.trim(),
@@ -270,130 +233,13 @@ function FacturesPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <CardTitle>Lignes facturées</CardTitle>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setLines((ls) => [...ls, newLine()])}
-            >
-              <Plus className="h-4 w-4" /> Ajouter une ligne
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {lines.map((l, i) => {
-              const pu = parseFloat(l.unit_price_ht.replace(",", ".")) || 0;
-              const qty = parseFloat(l.quantity.replace(",", ".")) || 0;
-              const ttc = pu * qty * (1 + l.tva / 100);
-              return (
-                <div
-                  key={l.id}
-                  className="grid gap-2 rounded-lg border border-border p-3 md:grid-cols-12"
-                >
-                  <div className="md:col-span-2">
-                    <Label className="text-xs">Type</Label>
-                    <Select
-                      value={l.type}
-                      onValueChange={(v) =>
-                        updateLine(l.id, { type: v as LineType })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Service">Service</SelectItem>
-                        <SelectItem value="Matériel">Matériel</SelectItem>
-                        <SelectItem value="Taux horaire">Taux horaire</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="md:col-span-4">
-                    <Label className="text-xs">Description</Label>
-                    <Input
-                      value={l.description}
-                      onChange={(e) =>
-                        updateLine(l.id, { description: e.target.value })
-                      }
-                      placeholder="Ex : Remplacement mitigeur cuisine"
-                      maxLength={300}
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label className="text-xs">PU HT</Label>
-                    <Input
-                      inputMode="decimal"
-                      value={l.unit_price_ht}
-                      onChange={(e) =>
-                        updateLine(l.id, { unit_price_ht: e.target.value })
-                      }
-                      placeholder="0,00"
-                    />
-                  </div>
-                  <div className="md:col-span-1">
-                    <Label className="text-xs">Qté</Label>
-                    <Input
-                      inputMode="decimal"
-                      value={l.quantity}
-                      onChange={(e) =>
-                        updateLine(l.id, { quantity: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="md:col-span-1">
-                    <Label className="text-xs">TVA</Label>
-                    <Select
-                      value={String(l.tva)}
-                      onValueChange={(v) =>
-                        updateLine(l.id, { tva: parseFloat(v) as TvaRate })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="0">0%</SelectItem>
-                        <SelectItem value="5.5">5,5%</SelectItem>
-                        <SelectItem value="10">10%</SelectItem>
-                        <SelectItem value="20">20%</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label className="text-xs">Prix TTC</Label>
-                    <div className="flex items-center gap-2">
-                      <Input readOnly value={fmtEUR(ttc)} className="bg-muted" />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeLine(l.id)}
-                        disabled={lines.length === 1}
-                        aria-label={`Supprimer ligne ${i + 1}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
+        <LineItemsEditor
+          title="Lignes facturées"
+          lines={lines}
+          onChange={setLines}
+        />
 
-        <Card>
-          <CardContent className="grid gap-2 pt-6 md:grid-cols-3">
-            <TotalBox label="Total HT" value={fmtEUR(totals.totalHT)} />
-            <TotalBox label="Total TVA" value={fmtEUR(totals.totalTVA)} />
-            <TotalBox
-              label="Total TTC"
-              value={fmtEUR(totals.totalTTC)}
-              accent
-            />
-          </CardContent>
-        </Card>
+        <TotalsCard totals={totals} />
 
         <div className="flex justify-end">
           <Button type="submit" size="lg" disabled={submitting}>
@@ -414,46 +260,4 @@ function FacturesPage() {
       </form>
     </div>
   );
-}
-
-function TotalBox({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-lg border p-4 ${
-        accent
-          ? "border-primary bg-primary/10"
-          : "border-border bg-muted/30"
-      }`}
-    >
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">
-        {label}
-      </div>
-      <div className={`mt-1 text-xl font-bold ${accent ? "text-primary" : ""}`}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function downloadBase64Pdf(base64: string, filename: string) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  const blob = new Blob([bytes], { type: "application/pdf" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
 }
