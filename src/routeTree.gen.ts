@@ -37,6 +37,7 @@ import { Route as AdminFacturesRouteImport } from './routes/admin/factures'
 import { Route as AdminDevisRouteImport } from './routes/admin/devis'
 import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
 import { Route as ApiAttachmentsUploadRouteImport } from './routes/api/attachments/upload'
+import { Route as AdminDevisIdRouteImport } from './routes/admin/devis_.$id'
 import { Route as LovableEmailTransactionalSendRouteImport } from './routes/lovable/email/transactional/send'
 import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
 import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
@@ -182,6 +183,11 @@ const ApiAttachmentsUploadRoute = ApiAttachmentsUploadRouteImport.update({
   path: '/api/attachments/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminDevisIdRoute = AdminDevisIdRouteImport.update({
+  id: '/devis_/$id',
+  path: '/devis/$id',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const LovableEmailTransactionalSendRoute =
   LovableEmailTransactionalSendRouteImport.update({
     id: '/lovable/email/transactional/send',
@@ -228,6 +234,7 @@ export interface FileRoutesByFullPath {
   '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin/': typeof AdminIndexRoute
   '/services/': typeof ServicesIndexRoute
+  '/admin/devis/$id': typeof AdminDevisIdRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -259,6 +266,7 @@ export interface FileRoutesByTo {
   '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin': typeof AdminIndexRoute
   '/services': typeof ServicesIndexRoute
+  '/admin/devis/$id': typeof AdminDevisIdRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -293,6 +301,7 @@ export interface FileRoutesById {
   '/services/sanitaire': typeof ServicesSanitaireRoute
   '/admin/': typeof AdminIndexRoute
   '/services/': typeof ServicesIndexRoute
+  '/admin/devis_/$id': typeof AdminDevisIdRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
@@ -328,6 +337,7 @@ export interface FileRouteTypes {
     | '/services/sanitaire'
     | '/admin/'
     | '/services/'
+    | '/admin/devis/$id'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
     | '/lovable/email/queue/process'
@@ -359,6 +369,7 @@ export interface FileRouteTypes {
     | '/services/sanitaire'
     | '/admin'
     | '/services'
+    | '/admin/devis/$id'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
     | '/lovable/email/queue/process'
@@ -392,6 +403,7 @@ export interface FileRouteTypes {
     | '/services/sanitaire'
     | '/admin/'
     | '/services/'
+    | '/admin/devis_/$id'
     | '/api/attachments/upload'
     | '/lovable/email/suppression'
     | '/lovable/email/queue/process'
@@ -618,6 +630,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAttachmentsUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/devis_/$id': {
+      id: '/admin/devis_/$id'
+      path: '/devis/$id'
+      fullPath: '/admin/devis/$id'
+      preLoaderRoute: typeof AdminDevisIdRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/lovable/email/transactional/send': {
       id: '/lovable/email/transactional/send'
       path: '/lovable/email/transactional/send'
@@ -651,6 +670,7 @@ interface AdminRouteRouteChildren {
   AdminRendezVousRoute: typeof AdminRendezVousRoute
   AdminResetPasswordRoute: typeof AdminResetPasswordRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  AdminDevisIdRoute: typeof AdminDevisIdRoute
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
@@ -662,6 +682,7 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminRendezVousRoute: AdminRendezVousRoute,
   AdminResetPasswordRoute: AdminResetPasswordRoute,
   AdminIndexRoute: AdminIndexRoute,
+  AdminDevisIdRoute: AdminDevisIdRoute,
 }
 
 const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
