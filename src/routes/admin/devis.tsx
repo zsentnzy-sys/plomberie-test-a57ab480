@@ -349,7 +349,7 @@ function QuotesPage() {
                     <TableCell className="pr-6 text-right align-top">
                       <div className="flex items-center justify-end gap-1">
                         <Button asChild size="sm" variant="outline" className="h-8">
-                          <Link to="/admin/devis_/$id" params={{ id: quote.id }}>
+                          <Link to="/admin/devis/$id" params={{ id: quote.id }}>
                             <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                             Traiter
                           </Link>
@@ -417,7 +417,7 @@ function QuotesPage() {
 
                   <div className="flex items-center justify-between gap-3 border-t pt-4">
                     <Button asChild size="sm" variant="outline" className="h-8">
-                      <Link to="/admin/devis_/$id" params={{ id: quote.id }}>
+                      <Link to="/admin/devis/$id" params={{ id: quote.id }}>
                         <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                         Traiter
                       </Link>
