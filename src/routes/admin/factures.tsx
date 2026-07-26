@@ -13,8 +13,6 @@ import {
   newLine,
   parseNum,
   type EditableLine,
-  type LineType,
-  type TvaRate,
 } from "@/components/admin/LineItemsEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
