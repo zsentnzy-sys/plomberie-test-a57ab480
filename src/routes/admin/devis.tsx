@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   queryOptions,
   useMutation,
@@ -347,11 +347,19 @@ function QuotesPage() {
                       />
                     </TableCell>
                     <TableCell className="pr-6 text-right align-top">
-                      <DeleteQuoteButton
-                        quote={quote}
-                        disabled={remove.isPending}
-                        onDelete={() => remove.mutate(quote.id)}
-                      />
+                      <div className="flex items-center justify-end gap-1">
+                        <Button asChild size="sm" variant="outline" className="h-8">
+                          <Link to="/admin/devis_/$id" params={{ id: quote.id }}>
+                            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                            Traiter
+                          </Link>
+                        </Button>
+                        <DeleteQuoteButton
+                          quote={quote}
+                          disabled={remove.isPending}
+                          onDelete={() => remove.mutate(quote.id)}
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -408,9 +416,12 @@ function QuotesPage() {
                   </div>
 
                   <div className="flex items-center justify-between gap-3 border-t pt-4">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Statut de la demande
-                    </span>
+                    <Button asChild size="sm" variant="outline" className="h-8">
+                      <Link to="/admin/devis_/$id" params={{ id: quote.id }}>
+                        <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                        Traiter
+                      </Link>
+                    </Button>
                     <StatusSelect
                       quote={quote}
                       disabled={updateStatus.isPending}
