@@ -1,3 +1,5 @@
+import { INVOICE_LEGAL } from "./document-config.server";
+
 // Server-only artisan/company information. MUST NEVER be imported from
 // client code — the .server.ts suffix guarantees the bundler strips it
 // from client bundles. SIRET, IBAN, BIC and legal mentions live here.
@@ -23,8 +25,7 @@ export const ARTISAN_INFO: ArtisanInfo = {
   siret: "SIRET 000 000 000 00000 - APE 4322A",
   iban: "FR76 0000 0000 0000 0000 0000 000",
   bic: "AGRIFRPP",
-  legal:
-    "Assurance décennale et responsabilité civile professionnelle souscrites. TVA sur les débits. En cas de retard de paiement, indemnité forfaitaire de 40 EUR (art. L441-6 du Code de commerce). Facture payable à réception.",
+  legal: INVOICE_LEGAL,
 };
 
 // Snapshot persisted in invoices.artisan_snapshot at generation time so
