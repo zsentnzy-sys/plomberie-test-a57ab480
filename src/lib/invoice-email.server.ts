@@ -63,3 +63,6 @@ export async function sendDocumentEmail(params: SendDocumentEmailParams): Promis
     throw new Error(`Envoi email facture échoué [${res.status}]: ${errorBody}`)
   }
 }
+
+/** Backwards-compatible alias used by the invoice flow. */
+export const sendInvoiceEmail = sendDocumentEmail
