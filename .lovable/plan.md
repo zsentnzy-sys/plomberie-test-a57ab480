@@ -1,61 +1,38 @@
 ## Objectif
 
-Fiabiliser le moteur PDF commun aux factures et devis (pagination, débordements, libellés, duplications) sans toucher au design, aux règles métier, aux RPC, aux e-mails ni à la base.
+Corriger trois défauts de pagination/débordement restants dans le moteur PDF partagé `src/lib/documents.server.ts`. Aucun changement de design, de couleurs, de marges, de règles métier ou d'envoi d'e-mails.
 
-## Changements prévus, fichier par fichier
+## 1. Bloc client : plus de dépassement vertical
 
-### 1. `src/lib/document-config.server.ts` (nouveau)
+Dans `drawClientBlock()`, chaque ligne est actuellement dessinée sans contrôle d'espace (label, nom, adresse multi-lignes, e-mail, téléphone).
 
-Configuration commerciale/juridique, exclusivement serveur :
+Correction : pré-calculer la hauteur du bloc « identité » (label 14 + nom 13 + lignes d'adresse wrappées ×12 + lignes e-mail ×12 + téléphone 12 + 14 de marge) et appeler `ensureSpace()` une fois pour garder le bloc groupé, puis un `ensureSpace(ctx, 12)` défensif avant chaque ligne dessinée pour couvrir le cas d'un bloc plus haut qu'une page entière (adresse très longue).
 
-- `invoiceLegal` (reprend le texte actuel de `ARTISAN_INFO.legal`)
-- `quoteLegal`, `quoteNotice`, `quoteSignatureLabel` (textes déplacés depuis `quotes.server.ts`)
-- Libellés de bloc client : `invoiceClientLabel = "Facturé à"`, `quoteClientLabel = "Devis adressé à"`
+Le bloc `notice` conserve sa logique actuelle (déjà protégée).
 
-### 2. `src/lib/artisan.server.ts`
+## 2. Wrapping des e-mails et des lignes longues du bloc client
 
-- Reste la **seule** définition de `ArtisanInfo` (type source).
-- `ARTISAN_INFO` et `buildArtisanSnapshot()` inchangés, snapshot toujours compatible avec les données déjà persistées.
+`client.email`, `client.name` et `client.phone` sont dessinés directement et peuvent sortir de la page.
 
-### 3. `src/lib/documents.server.ts` (cœur du travail)
+Correction : passer ces valeurs par `wrapByWidth()` avec la largeur disponible du bloc client (`ctx.width - 2*M - 180`), avec la bonne police et la bonne taille pour chacun. `wrapByWidth` gère déjà le hard-split des chaînes sans espace, donc une adresse e-mail très longue sera coupée proprement au lieu de déborder.
 
-- Supprimer l'interface locale `ArtisanInfo` ; importer le type depuis `artisan.server.ts` et le réexporter pour ne rien casser. (import type { ArtisanInfo } from "./artisan.server";)
-- `RenderDocumentParams` : ajout de `clientBlockLabel` (obligatoire), `documentTypeLabel` et `continuationLabel` (optionnels).
-- Découpage de `renderDocumentPdf()` en helpers privés : `drawPageHeader`, `drawClientBlock`, `drawTableHeader`, `drawDocumentLine`, `drawTotalsBlock`, `drawNotesBlock`, `drawFooterBlock`, `drawSignatureBlock`, `addContinuationPage`. Un petit contexte de rendu interne (page, y, fonts, couleurs, marges, `ensureSpace(h)`) évite toute duplication.
-- Pagination : hauteur de chaque ligne calculée **avant** dessin (nombre de lignes de description) ; nouvelle page si elle ne tient pas ; jamais de ligne coupée.
-- Chaque page de continuation : mêmes marges, rappel discret « TYPE N° XXX (suite) », puis en-tête de tableau redessiné.
-- Totaux : hauteur calculée selon le nombre de taux de TVA, bloc gardé groupé sur une page.
-- Notes, footer, IBAN/BIC, mentions légales, signature : contrôle d'espace avant chaque bloc, continuation automatique, zone « Bon pour accord » jamais scindée.
-- `wrapText` : mesure réelle via `font.widthOfTextAtSize()` (largeur en points + taille), découpe des mots très longs sans espace, sanitisation WinAnsi conservée. L'ancienne signature par nombre de caractères est remplacée en interne ; export conservé si nécessaire.
+## 3. Pré-calcul du footer basé sur les lignes réellement wrappées
 
-### 4. `src/lib/invoices.server.ts`
+Dans `drawFooterBlock()`, `firstChunk` compte `footerLines.length` et la ligne IBAN comme une ligne chacune, alors qu'elles sont ensuite wrappées.
 
-- Importe `ArtisanInfo` depuis `artisan.server.ts` ; garde les réexports existants.
-- `generateInvoicePdf` passe `clientBlockLabel` et `documentTypeLabel = "Facture"`, `legal` depuis la config serveur (fallback sur `artisan.legal` du snapshot pour les documents anciens).
+Correction : wrapper d'abord toutes les lignes (footer, IBAN/BIC, légal) dans des tableaux, puis calculer `firstChunk` à partir du nombre réel de lignes obtenues (séparateur 16 + n_footer×12 + n_iban×12 + min(n_legal, 2)×10) avant l'`ensureSpace()` initial. Le rendu ensuite itère sur ces tableaux déjà calculés — pas de double wrapping.
 
-### 5. `src/lib/quotes.server.ts`
+## Détails techniques
 
-- `QUOTE_NOTICE` / `QUOTE_LEGAL` deviennent de simples réexports lisant `document-config.server.ts` (aucun texte commercial en dur dans le moteur).
-- Passe `clientBlockLabel = "Devis adressé à"`, `documentTypeLabel = "Devis"`, `signatureBlock` avec libellé configurable.
+- Fichier touché : `src/lib/documents.server.ts` uniquement (helpers privés `drawClientBlock` et `drawFooterBlock`).
+- Aucun changement de signature publique, aucun impact sur `invoices.server.ts` / `quotes.server.ts` / `document-config.server.ts`.
 
-### 6. `src/lib/invoices.functions.ts`
+## Vérification
 
-- Suppression des définitions locales `round2` et `bytesToBase64` ; import des versions partagées (comme le fait déjà `quotes.functions.ts`).
-
-### 7. `src/lib/quotes.functions.ts`
-
-- Ajustement d'imports uniquement si le renommage des constantes l'impose.
-
-## Vérifications
-
-Script de génération hors-ligne (`/tmp`) appelant directement le moteur, puis contrôle visuel via `pdftoppm` :
-
-Factures : 1 ligne · plusieurs taux de TVA · description longue · 20–50 lignes (multi-pages) · avec/sans téléphone client · avec/sans IBAN-BIC.
-
-Devis : simple · avec notes · description longue · multi-pages · plusieurs taux de TVA · zone de signature · mentions légales longues.
-
-Contrôles par document : aucune ligne coupée, aucun texte hors page, en-tête de tableau répété, totaux groupés et visibles, footer lisible, libellé client correct, titre + numéro corrects, PDF ouvrable. Les scénarios réellement vérifiés seront listés à la fin.
-
-## Contraintes respectées
-
-Aucun changement de statuts, RPC, idempotence, envoi d'e-mails, tables, ni du design du dashboard. Un seul moteur PDF (`documents.server.ts`). Les informations artisan restent strictement serveur.
+Génération et contrôle visuel (conversion en images) de scénarios ciblés :
+- client avec adresse très longue sur 6+ lignes en bas de page ;
+- e-mail client très long sans espace ;
+- client sans téléphone ;
+- facture avec IBAN + BIC longs et mentions légales longues en fin de page ;
+- devis avec footer long + zone de signature ;
+- contrôle de non-régression : facture simple 1 ligne et devis multi-pages inchangés visuellement.
