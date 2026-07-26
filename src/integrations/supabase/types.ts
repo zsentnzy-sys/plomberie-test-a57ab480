@@ -355,6 +355,77 @@ export type Database = {
         }
         Relationships: []
       }
+      quote_counter: {
+        Row: {
+          last_number: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          last_number?: number
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          last_number?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
+      quote_lines: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          line_total_ht: number
+          line_total_ttc: number
+          line_total_tva: number
+          position: number
+          quantity: number
+          quote_id: string
+          tva: number
+          type: string
+          unit_price_ht: number
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          line_total_ht: number
+          line_total_ttc: number
+          line_total_tva: number
+          position: number
+          quantity: number
+          quote_id: string
+          tva: number
+          type: string
+          unit_price_ht: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          line_total_ht?: number
+          line_total_ttc?: number
+          line_total_tva?: number
+          position?: number
+          quantity?: number
+          quote_id?: string
+          tva?: number
+          type?: string
+          unit_price_ht?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_lines_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quote_requests: {
         Row: {
           address: string | null
@@ -393,6 +464,104 @@ export type Database = {
           urgency?: string | null
         }
         Relationships: []
+      }
+      quotes: {
+        Row: {
+          artisan_snapshot: Json
+          cancelled_at: string | null
+          client_address: string
+          client_email: string
+          client_name: string
+          client_phone: string | null
+          created_at: string
+          created_by: string
+          email_artisan_error: string | null
+          email_artisan_status: string
+          email_client_error: string | null
+          email_client_status: string
+          generation_error: string | null
+          id: string
+          idempotency_key: string
+          notes: string | null
+          pdf_storage_path: string | null
+          quote_date: string
+          quote_number: string
+          quote_request_id: string | null
+          sent_at: string | null
+          status: Database["public"]["Enums"]["quote_status"]
+          total_ht: number
+          total_ttc: number
+          total_tva: number
+          updated_at: string
+          valid_until: string
+        }
+        Insert: {
+          artisan_snapshot?: Json
+          cancelled_at?: string | null
+          client_address: string
+          client_email: string
+          client_name: string
+          client_phone?: string | null
+          created_at?: string
+          created_by: string
+          email_artisan_error?: string | null
+          email_artisan_status?: string
+          email_client_error?: string | null
+          email_client_status?: string
+          generation_error?: string | null
+          id?: string
+          idempotency_key: string
+          notes?: string | null
+          pdf_storage_path?: string | null
+          quote_date: string
+          quote_number: string
+          quote_request_id?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["quote_status"]
+          total_ht?: number
+          total_ttc?: number
+          total_tva?: number
+          updated_at?: string
+          valid_until: string
+        }
+        Update: {
+          artisan_snapshot?: Json
+          cancelled_at?: string | null
+          client_address?: string
+          client_email?: string
+          client_name?: string
+          client_phone?: string | null
+          created_at?: string
+          created_by?: string
+          email_artisan_error?: string | null
+          email_artisan_status?: string
+          email_client_error?: string | null
+          email_client_status?: string
+          generation_error?: string | null
+          id?: string
+          idempotency_key?: string
+          notes?: string | null
+          pdf_storage_path?: string | null
+          quote_date?: string
+          quote_number?: string
+          quote_request_id?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["quote_status"]
+          total_ht?: number
+          total_ttc?: number
+          total_tva?: number
+          updated_at?: string
+          valid_until?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotes_quote_request_id_fkey"
+            columns: ["quote_request_id"]
+            isOneToOne: false
+            referencedRelation: "quote_requests"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       request_attachments: {
         Row: {
@@ -497,6 +666,28 @@ export type Database = {
           reused: boolean
         }[]
       }
+      create_quote_for_idempotency: {
+        Args: {
+          _artisan_snapshot: Json
+          _client_address: string
+          _client_email: string
+          _client_name: string
+          _client_phone: string
+          _idempotency_key: string
+          _notes: string
+          _quote_date: string
+          _quote_request_id: string
+          _total_ht: number
+          _total_ttc: number
+          _total_tva: number
+          _valid_until: string
+        }
+        Returns: {
+          quote_id: string
+          quote_number: string
+          reused: boolean
+        }[]
+      }
       delete_email: {
         Args: { message_id: number; queue_name: string }
         Returns: boolean
@@ -542,6 +733,18 @@ export type Database = {
         | "sent"
         | "partially_sent"
         | "send_failed"
+        | "cancelled"
+      quote_status:
+        | "generating"
+        | "generation_failed"
+        | "ready"
+        | "sending"
+        | "sent"
+        | "partially_sent"
+        | "send_failed"
+        | "accepted"
+        | "refused"
+        | "expired"
         | "cancelled"
     }
     CompositeTypes: {
@@ -679,6 +882,19 @@ export const Constants = {
         "sent",
         "partially_sent",
         "send_failed",
+        "cancelled",
+      ],
+      quote_status: [
+        "generating",
+        "generation_failed",
+        "ready",
+        "sending",
+        "sent",
+        "partially_sent",
+        "send_failed",
+        "accepted",
+        "refused",
+        "expired",
         "cancelled",
       ],
     },
