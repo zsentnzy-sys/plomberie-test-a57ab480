@@ -31,12 +31,6 @@ const invoiceSchema = z.object({
 
 const BUCKET = "request-attachments";
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
-
 export type EmailStatus = "sent" | "failed" | "pending";
 export interface InvoiceEmailResult {
   status: EmailStatus;
@@ -67,10 +61,6 @@ export interface GenerateInvoiceResult {
   status: InvoiceGlobalStatus;
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
 export const generateInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => invoiceSchema.parse(data))
@@ -92,6 +82,8 @@ export const generateInvoice = createServerFn({ method: "POST" })
       generateInvoicePdf,
       formatEUR,
       formatDateFR,
+      round2,
+      bytesToBase64,
     } = await import("@/lib/invoices.server");
 
     const totals = computeTotals(data.lines);
