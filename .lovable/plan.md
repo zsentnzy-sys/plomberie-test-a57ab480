@@ -1,111 +1,117 @@
 ## Objectif
 
-Fiabiliser le module de facturation via une nouvelle migration corrective et une refonte du handler serveur, sans toucher au design ni aux validations du formulaire.
+Depuis `/admin/devis`, permettre de transformer une demande de devis en devis PDF numéroté, persisté, stocké dans le bucket privé et envoyé au client (avec copie artisan), sans toucher au design existant.
 
-## 1. Nouvelle migration SQL (corrective, additive uniquement)
+## 1. Migration SQL (nouvelle, additive)
 
-Fichier : `supabase/migrations/<timestamp>_invoices_hardening.sql`. Aucune migration existante n'est modifiée.
+### Enum `quote_status`
 
-### `public.invoices`
-- Nouveau type enum `invoice_status` : `generating | generation_failed | ready | sending | sent | partially_sent | send_failed | cancelled`.
-- Ajouts : `status invoice_status not null default 'generating'`, `generation_error text`, `sent_at timestamptz`, `cancelled_at timestamptz`, `artisan_snapshot jsonb not null default '{}'::jsonb` (backfill pour lignes existantes puis suppression du default).
-- `alter column pdf_storage_path drop not null`.
-- Contraintes CHECK :
-  - `email_client_status` / `email_artisan_status` ∈ `{pending, sent, failed}` (défaut `pending`).
-  - `total_ht >= 0`, `total_tva >= 0`, `total_ttc >= 0`.
-  - `abs(total_ttc - (total_ht + total_tva)) < 0.01`.
-- Conservation des contraintes uniques existantes `invoice_number` et `idempotency_key` (aucun `DROP`).
+`generating | generation_failed | ready | sending | sent | partially_sent | send_failed | accepted | refused | expired | cancelled` 
 
-### `public.invoice_lines`
-- Ajout `line_total_tva numeric(12,2) not null default 0` (backfill = `line_total_ttc - line_total_ht`, puis retrait du default).
-- Contrainte unique `(invoice_id, position)`.
-- Index conservé sur `invoice_id` (créé si absent).
-- CHECK : `position >= 1`, `quantity > 0`, `unit_price_ht >= 0`, `tva in (0, 5.5, 10, 20)`, `line_total_ht >= 0`, `line_total_tva >= 0`, `abs(line_total_ttc - (line_total_ht + line_total_tva)) < 0.01`.
+### `public.quotes`
 
-### RPC transactionnelle `public.create_invoice_for_idempotency`
-- Arguments : `_idempotency_key uuid`, `_client_name`, `_client_address`, `_client_email`, `_client_phone`, `_payment_method`, `_invoice_date date`, `_total_ht`, `_total_tva`, `_total_ttc`, `_artisan_snapshot jsonb`.
-- `SECURITY DEFINER`, `search_path = public`.
-- Étapes atomiques :
-  1. `has_role(auth.uid(), 'admin')` sinon `RAISE EXCEPTION`.
-  2. `SELECT id, invoice_number FROM invoices WHERE idempotency_key = _idempotency_key` — si présent, renvoie `(id, invoice_number, reused=true)`.
-  3. Sinon appelle `next_invoice_number()` et fait un `INSERT` avec `status='generating'`, `created_by = auth.uid()`, `pdf_storage_path = null`.
-  4. Retourne `(id, invoice_number, reused=false)`.
-- GRANT `EXECUTE` à `authenticated`.
+- `id uuid pk default gen_random_uuid()`
+- `quote_number text not null unique`
+- `quote_request_id uuid references public.quote_requests(id) on delete set null`
+- `created_by uuid not null`
+- `client_name`, `client_address`, `client_email`, `client_phone`
+- `quote_date date not null`, `valid_until date not null`
+- `notes text`
+- `total_ht`, `total_tva`, `total_ttc` numeric(12,2) not null
+- `artisan_snapshot jsonb not null`
+- `pdf_storage_path text` (nullable)
+- `status quote_status not null default 'generating'`, `generation_error text`, `sent_at timestamptz`
+- `email_client_status text default 'pending'`, `email_client_error text`
+- `email_artisan_status text default 'pending'`, `email_artisan_error text`
+- `idempotency_key text not null unique`
+- `created_at`, `updated_at` + trigger `update_updated_at_column`
+- CHECK : statuts e-mail ∈ {pending,sent,failed}, totaux >= 0, `abs(total_ttc-(total_ht+total_tva)) < 0.01`, `valid_until >= quote_date`
 
-Aucun `DELETE`/`UPDATE` sur les données existantes hors backfills décrits ci-dessus.
+### `public.quote_lines`
 
-## 2. Séparation stricte des informations artisan
+Même forme que `invoice_lines` : `quote_id`, `position`, `type`, `description`, `unit_price_ht`, `quantity`, `tva`, `line_total_ht`, `line_total_tva`, `line_total_ttc`, unique `(quote_id, position)`, index sur `quote_id`, CHECK montants/TVA/position.
 
-- Nouveau fichier `src/lib/artisan.server.ts` (server-only) exportant `ARTISAN_INFO` (company, fullName, address, phone, email, siret, iban, bic, legal) et une fonction `buildArtisanSnapshot()` retournant l'objet à persister dans `artisan_snapshot`.
-- Suppression du bloc `ARTISAN_INFO` dans `src/routes/admin/factures.tsx` et retrait du champ `artisan` du payload envoyé au serveur.
-- Schéma Zod `invoiceSchema` dans `src/lib/invoices.functions.ts` : suppression du sous-objet `artisan`. Le client n'envoie plus SIRET/IBAN/BIC/mentions légales.
-- Le PDF utilise l'artisan lu côté serveur ; le rendu et l'entête PDF sont inchangés visuellement.
+### Grants + RLS
 
-## 3. Refonte de `generateInvoice` (`src/lib/invoices.functions.ts`)
+`GRANT ... TO authenticated`, `GRANT ALL TO service_role`, RLS activée, politiques admin-only via `has_role(auth.uid(),'admin')` (mêmes règles que `invoices`).
 
-Nouveau flux (l'ordre remplace l'ancien `SELECT idempotency_key → next_invoice_number → INSERT`) :
+### Compteur et RPC
 
-1. Vérification admin (inchangée).
-2. Calcul des totaux serveur (`computeTotals`).
-3. Construction de `artisan_snapshot` via `buildArtisanSnapshot()`.
-4. `context.supabase.rpc('create_invoice_for_idempotency', {...})` — retourne `{ invoiceId, invoiceNumber, reused }`.
-5. Chemin `reused = true` :
-   - Charge la facture (`status`, `pdf_storage_path`, totaux persistés, statuts e-mails, `artisan_snapshot`, lignes).
-   - Si `pdf_storage_path` présent : télécharge et retourne comme aujourd'hui.
-   - Sinon : régénère le PDF **depuis les données persistées** (invoices + invoice_lines + artisan_snapshot), sans réattribuer de numéro ; upload, `UPDATE invoices SET pdf_storage_path=..., status='ready'`.
-   - Ne renvoie pas d'e-mail automatiquement pour un reused (les statuts e-mails restent tels que persistés).
-6. Chemin `reused = false` :
-   1. `INSERT` des `invoice_lines` (avec `line_total_tva`). Sur erreur : `UPDATE invoices SET status='generation_failed', generation_error=<msg>` et throw.
-   2. Génération PDF depuis les données persistées.
-   3. Upload PDF dans `request-attachments` (`invoices/YYYY/FACT-YYYY-XXXX.pdf`).
-   4. `UPDATE invoices SET pdf_storage_path=..., status='ready'`.
-   5. Toute erreur dans 6.2/6.3/6.4 : `UPDATE invoices SET status='generation_failed', generation_error=<msg>` puis throw (pas de suppression de la facture ni de rollback du numéro).
-7. Envoi e-mails (uniquement si `!reused` ou si les statuts persistés valent `pending`) :
-   - Passe `status='sending'`.
-   - Envoie l'e-mail client, puis `UPDATE email_client_status/error` immédiatement, vérifie l'erreur Supabase (log + poursuite).
-   - Idem artisan.
-   - Recharge les deux statuts effectifs et calcule le statut global :
-     - `sent` si les deux `sent`.
-     - `partially_sent` si un `sent` et un `failed`.
-     - `send_failed` si les deux `failed`.
-     - Si l'un est encore `pending`, ne pas convertir en `failed` — laisser `sending` et remonter l'erreur.
-   - `UPDATE invoices SET status=<global>, sent_at = case when 'sent' then now() end`.
-8. Idempotence Resend par destinataire (nouveaux headers) : `sendInvoiceEmail` accepte `idempotencyKey` et envoie `Idempotency-Key: invoice/<invoiceId>/client/v1` (resp. `.../artisan/v1`) au gateway Resend.
-9. Retour au front : `{ invoiceId, invoiceNumber, pdfBase64, totals, emailClient, emailArtisan, reused, status }`.
+- `public.quote_counter(year, last_number)` (même modèle que `invoice_counter`).
+- `public.create_quote_for_idempotency(...)` `SECURITY DEFINER` : vérifie le rôle admin, retourne le devis existant si la clé existe (`reused=true`), sinon réserve atomiquement `DEV-YYYY-XXXX` et insère la ligne en `status='generating'`. Retourne `(quote_id, quote_number, reused)`. `GRANT EXECUTE TO authenticated`.
 
-## 4. `getInvoicePdfSignedUrl`
+## 2. Mutualisation avec les factures
 
-Inchangé fonctionnellement ; toujours admin-gated et scoping RLS via `supabaseAdmin` + bucket privé.
+Extraction dans un nouveau `src/lib/documents.server.ts` (server-only), utilisé par factures **et** devis :
 
-## 5. Front `src/routes/admin/factures.tsx`
+- `computeTotals`, `round2`, `formatEUR`, `formatDateFR`, types `DocumentLine`/`Totals` (déplacés depuis `invoices.server.ts`, réexportés pour ne rien casser).
+- `drawDocumentHeader()` — en-tête artisan + bloc titre paramétrable (`title`, `numberLabel`, lignes méta à droite).
+- `drawLinesTable()` — tableau des prestations identique.
+- `drawTotalsBlock()` — Total HT / TVA par taux / Total TTC.
+- `drawFooter()` — IBAN/BIC + mentions légales passées en paramètre.
+- `uploadDocumentPdf(path, bytes)` et `bytesToBase64` (déplacé depuis `invoices.functions.ts` vers un helper partagé).
 
-Modifications minimales, aucune retouche visuelle :
-- Retrait du bloc `ARTISAN_INFO` et du champ `artisan` dans le payload.
-- Ajout d'un `invoiceIdRef` (state) qui stocke `res.invoiceId` après la première tentative.
-- Après un **échec partiel d'e-mail** (`partially_sent` / `send_failed`) : **ne pas** régénérer `idempotencyKey` ni réinitialiser les lignes. Un nouveau clic sur "Générer et envoyer" réutilise donc la même facture (branche `reused=true`, futur bouton de renvoi ciblé pourra pointer sur `invoiceId`).
-- Après un succès complet (`sent`) : reset des lignes et rotation de `idempotencyKey` (comportement actuel).
-- Après un throw serveur (`generation_failed`) : conserver la clé pour permettre le retry sur la même facture ; afficher l'erreur.
-- Toasts : conserver les libellés actuels, ajouter un cas explicite `send_failed` (tous les e-mails ont échoué).
+Réutilisés sans copie : `src/lib/artisan.server.ts` (`buildArtisanSnapshot`), `src/lib/invoice-email.server.ts` renommé conceptuellement en envoi générique `sendDocumentEmail` (même fichier, signature élargie, alias `sendInvoiceEmail` conservé), bucket privé `request-attachments`.
 
-## 6. Sécurité conservée
+`src/lib/invoices.server.ts` est refactorisé pour appeler ces primitives — le rendu PDF facture reste visuellement identique.
 
-- Authentification `requireSupabaseAuth` inchangée.
-- `has_role(auth.uid(), 'admin')` vérifié dans la RPC + dans le handler.
-- Zod : schéma resserré (suppression `artisan`) mais toutes les autres validations préservées.
-- RLS admin-only sur `invoices` / `invoice_lines` : inchangées, la RPC est `SECURITY DEFINER`.
-- Bucket privé `request-attachments` et téléchargement via `createSignedUrl` : inchangés.
+## 3. Spécifique aux devis
 
-## Fichiers touchés
+- `src/lib/quotes.server.ts` : `generateQuotePdf()` — titre « DEVIS », `N° DEV-YYYY-XXXX`, date du devis, `Valable jusqu'au JJ/MM/AAAA`, bloc notes/conditions particulières, mentions légales devis (« Devis gratuit et sans engagement. Bon pour accord, date et signature. Prix fermes pendant la durée de validité. TVA applicable selon la nature des travaux. »), et la mention explicite « Ce document est un devis et ne constitue pas une facture. », Mentions légales configurables coté serveur.
+- `src/lib/email-templates/quote-document-client.tsx` et `quote-document-artisan.tsx` : e-mails avec nom du client, numéro, date, validité, montant TTC, invitation à répondre à l'e-mail pour accepter ou demander une modification. Enregistrés dans `registry.ts`.
+- Numérotation, statut, libellés PDF : propres aux devis.
 
-- **Nouvelle migration** : `supabase/migrations/<timestamp>_invoices_hardening.sql` (colonnes, contraintes, enum, RPC).
-- **Nouveau** : `src/lib/artisan.server.ts`.
-- **Modifié** : `src/lib/invoices.functions.ts` (schéma sans artisan, refonte du handler, appel RPC, régénération PDF, statuts globaux).
-- **Modifié** : `src/lib/invoice-email.server.ts` (paramètre `idempotencyKey` → header `Idempotency-Key`).
-- **Modifié** : `src/lib/invoices.server.ts` si nécessaire pour accepter des lignes hydratées depuis la base (mêmes calculs, aucune modification visuelle du PDF).
-- **Modifié** : `src/routes/admin/factures.tsx` (retrait artisan, conservation de la clé/idempotence après échec partiel, gestion `invoiceId`).
+## 4. Server functions — `src/lib/quotes.functions.ts`
+
+- `generateQuote` (`requireSupabaseAuth` + contrôle admin + Zod) :
+  1. Zod : coordonnées client, `quote_date`, `valid_until`, `notes` (max 1000), `lines` (1..50), `quote_request_id` uuid optionnel, `idempotency_key` uuid. Aucune donnée artisan reçue du navigateur.
+  2. Totaux calculés côté serveur.
+  3. `artisan_snapshot` construit côté serveur.
+  4. RPC `create_quote_for_idempotency` → `{quoteId, quoteNumber, reused}`.
+  5. `reused` : renvoie le PDF stocké ; si absent, régénération depuis `quotes` + `quote_lines` + `artisan_snapshot`, sans nouveau numéro. Pas de renvoi d'e-mail automatique.
+  6. Sinon : insert des lignes → PDF → upload `quotes/YYYY/DEV-YYYY-XXXX.pdf` → `status='ready'`. Toute erreur ⇒ `generation_failed` + `generation_error`, devis et numéro conservés.
+  7. E-mails : `status='sending'`, envoi client puis persistance immédiate du statut, puis artisan idem, vérification des erreurs Supabase ; statut global `sent` / `partially_sent` / `send_failed` ; `pending` jamais converti en `failed`. Clés Resend `quote/<quoteId>/client/v1` et `quote/<quoteId>/artisan/v1`.
+  8. Erreurs fournisseur loguées côté serveur, message générique renvoyé au navigateur.
+- `getQuoteForRequest({ quoteRequestId })` : renvoie le devis existant (numéro, statut, totaux, date d'envoi).
+- `getQuotePdfSignedUrl({ quoteId })` : URL signée 10 min, admin-only.
+- `resendQuoteEmail({ quoteId })` : réutilise le PDF stocké, renvoie au client, met à jour les statuts (pas de nouveau devis).
+
+`listQuotes` (`src/lib/admin.functions.ts`) est étendu pour joindre le devis associé (numéro + statut) à chaque demande.
+
+## 5. Interface admin
+
+### `/admin/devis` (modifié)
+
+- Nouvelle colonne **Actions** (desktop) et bloc équivalent en carte mobile, dans le style actuel.
+- Demande non traitée : bouton **Traiter** → navigation vers `/admin/devis/$id`.
+- Demande déjà traitée : badge numéro + statut du devis, puis **Voir**, **Télécharger**, **Renvoyer**.
+- Le bouton Supprimer existant reste en place ; la demande d'origine n'est jamais réinitialisée.
+
+### `/admin/devis/$id` (nouvelle page)
+
+Réutilise les composants d'édition de `/admin/factures` (extraits dans `src/components/admin/LineItemsEditor.tsx` + `ClientFieldsForm.tsx`, réutilisés par les deux pages sans changement visuel) :
+
+- Rappel en lecture seule de la demande (service, description, date, pièces jointes éventuelles).
+- Coordonnées client pré-remplies depuis la demande, éditables.
+- Éditeur de lignes (type / description / PU HT / quantité / TVA), ajout et suppression.
+- Date du devis (aujourd'hui par défaut) et validité (30 jours par défaut, date modifiable).
+- Champ notes / conditions particulières.
+- Totaux HT / TVA / TTC calculés en direct.
+- Bouton « Générer et envoyer » : `Loader2` + bouton désactivé pendant le traitement, toast de succès, toast distinct si PDF généré mais e-mail échoué, téléchargement local du PDF, retour à la liste et mise à jour de la ligne (invalidation de la query `["admin","quotes"]`).
+
+## 6. Idempotence et reprise
+
+- Clé UUID générée à l'ouverture de la page d'édition, conservée tant que l'envoi n'est pas totalement réussi ⇒ double-clic ou retry réseau réutilisent le même devis (`reused=true`).
+- Numéro attribué atomiquement dans la RPC, jamais réattribué.
+- Échec PDF ⇒ `generation_failed`, un nouveau clic reprend le même devis.
+- Échec e-mail ⇒ devis conservé en `send_failed` / `partially_sent`, action **Renvoyer** disponible depuis la liste.
+
+## Fichiers
+
+**Nouveaux** : migration SQL, `src/lib/documents.server.ts`, `src/lib/quotes.server.ts`, `src/lib/quotes.functions.ts`, `src/routes/admin/devis.$id.tsx`, `src/components/admin/LineItemsEditor.tsx`, `src/components/admin/ClientFieldsForm.tsx`, 2 templates e-mail devis.
+
+**Modifiés** : `src/lib/invoices.server.ts` (utilise les primitives partagées), `src/lib/invoices.functions.ts` (helpers mutualisés), `src/lib/invoice-email.server.ts` (envoi générique), `src/lib/email-templates/registry.ts`, `src/lib/admin.functions.ts`, `src/routes/admin/devis.tsx`, `src/routes/admin/factures.tsx` (réutilisation des composants extraits, rendu inchangé).
 
 ## Hors scope
 
-- UI de renvoi ciblé d'un e-mail ou d'annulation (`status='cancelled'`) — le schéma les supporte, l'écran viendra plus tard.
-- Historique/liste des factures.
-- Migration de purge du bucket.
+Interface de gestion `accepted` / `refused` / `expired` (schéma prêt), conversion devis → facture, historique des devis.
