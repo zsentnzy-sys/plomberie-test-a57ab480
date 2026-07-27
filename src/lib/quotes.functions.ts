@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Json } from "@/integrations/supabase/types";
 import { quoteSchema } from "./quotes.schemas";
-import type { QuoteEmailStatus, QuoteGlobalStatus, GenerateQuoteResult } from "./quotes.types";
+import type { GenerateQuoteResult } from "./quotes.types";
 
 export type {
   QuoteEmailStatus,
@@ -21,22 +21,17 @@ export const generateQuote = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { buildArtisanSnapshot } = await import("@/lib/artisan.server");
-    const {
-      computeTotals,
-      formatEUR,
-      formatDateFR,
-      bytesToBase64,
-      artisanFromSnapshot,
-      uploadDocumentPdf,
-      round2,
-    } = await import("@/lib/documents.server");
-    const { generateQuotePdf } = await import("@/lib/quotes.server");
+    const { formatEUR, formatDateFR, bytesToBase64 } = await import(
+      "@/lib/documents.server"
+    );
+    const { loadQuote, ensureQuotePdf } = await import("@/lib/quotes-pdf.server");
+    const { sendQuoteEmails } = await import("@/lib/quotes-email.server");
 
-    const totals = computeTotals(data.lines);
     const artisanSnapshot = buildArtisanSnapshot();
 
+    // Atomic: quote + lines are created (or reused) in a single transaction.
     const { data: rpcRows, error: rpcErr } = await context.supabase.rpc(
-      "create_quote_for_idempotency",
+      "create_quote_with_lines_for_idempotency",
       {
         _idempotency_key: data.idempotency_key,
         _quote_request_id: (data.quote_request_id ?? null) as unknown as string,
@@ -47,210 +42,77 @@ export const generateQuote = createServerFn({ method: "POST" })
         _quote_date: data.quote_date,
         _valid_until: data.valid_until,
         _notes: (data.notes || null) as unknown as string,
-        _total_ht: totals.totalHT,
-        _total_tva: totals.totalTVA,
-        _total_ttc: totals.totalTTC,
         _artisan_snapshot: artisanSnapshot as unknown as Json,
+        _lines: data.lines.map((l, i) => ({ ...l, position: i + 1 })) as unknown as Json,
       },
     );
     if (rpcErr || !rpcRows || rpcRows.length === 0) {
       console.error(`[quotes] RPC failure: ${rpcErr?.message ?? "no row"}`);
-      throw new Error("Création du devis impossible.");
+      throw new Error(rpcErr?.message ?? "Création du devis impossible.");
     }
-    const row = rpcRows[0] as {
+    const rpcRow = rpcRows[0] as {
       quote_id: string;
       quote_number: string;
       reused: boolean;
     };
-    const quoteId = row.quote_id;
-    const quoteNo = row.quote_number;
 
-    // ---------------- Reused path ----------------
-    if (row.reused) {
-      const { data: existing, error: exErr } = await supabaseAdmin
-        .from("quotes")
-        .select("*")
-        .eq("id", quoteId)
-        .single();
-      if (exErr || !existing) throw new Error("Devis existant introuvable.");
-
-      let pdfBytes: Uint8Array | null = null;
-      if (existing.pdf_storage_path) {
-        const dl = await supabaseAdmin.storage
-          .from("request-attachments")
-          .download(existing.pdf_storage_path);
-        if (!dl.error && dl.data) pdfBytes = new Uint8Array(await dl.data.arrayBuffer());
-      }
-
-      if (!pdfBytes) {
-        const { data: persisted, error: linesErr } = await supabaseAdmin
-          .from("quote_lines")
-          .select("position, type, description, unit_price_ht, quantity, tva")
-          .eq("quote_id", quoteId)
-          .order("position", { ascending: true });
-        if (linesErr || !persisted || persisted.length === 0) {
-          throw new Error("Lignes du devis introuvables.");
-        }
-        const rebuiltLines = persisted.map((l) => ({
-          type: l.type as "Service" | "Matériel" | "Taux horaire",
-          description: l.description,
-          unit_price_ht: Number(l.unit_price_ht),
-          quantity: Number(l.quantity),
-          tva: Number(l.tva) as 0 | 5.5 | 10 | 20,
-        }));
-        pdfBytes = await generateQuotePdf({
-          quoteNumber: existing.quote_number,
-          artisan: artisanFromSnapshot(existing.artisan_snapshot),
-          input: {
-            client_name: existing.client_name,
-            client_address: existing.client_address,
-            client_email: existing.client_email,
-            client_phone: existing.client_phone ?? undefined,
-            quote_date: existing.quote_date,
-            valid_until: existing.valid_until,
-            notes: existing.notes ?? undefined,
-            lines: rebuiltLines,
-          },
-          totals: computeTotals(rebuiltLines),
-        });
-        const path = `quotes/${existing.quote_date.slice(0, 4)}/${existing.quote_number}.pdf`;
-        await uploadDocumentPdf(path, pdfBytes);
-        await supabaseAdmin
-          .from("quotes")
-          .update({ pdf_storage_path: path, status: "ready" })
-          .eq("id", quoteId);
-      }
-
-      return {
-        quoteId,
-        quoteNumber: existing.quote_number,
-        pdfBase64: bytesToBase64(pdfBytes),
-        totals: {
-          totalHT: Number(existing.total_ht),
-          totalTVA: Number(existing.total_tva),
-          totalTTC: Number(existing.total_ttc),
-        },
-        emailClient: {
-          status: (existing.email_client_status as QuoteEmailStatus) ?? "pending",
-          error: existing.email_client_error ?? undefined,
-        },
-        emailArtisan: {
-          status: (existing.email_artisan_status as QuoteEmailStatus) ?? "pending",
-          error: existing.email_artisan_error ?? undefined,
-        },
-        reused: true,
-        status: (existing.status as QuoteGlobalStatus) ?? "ready",
-      };
-    }
-
-    // ---------------- Fresh quote ----------------
-    async function markGenerationFailed(msg: string) {
-      await supabaseAdmin
-        .from("quotes")
-        .update({ status: "generation_failed", generation_error: msg })
-        .eq("id", quoteId);
-    }
-
-    const lineRows = data.lines.map((l, i) => {
-      const ht = round2(l.unit_price_ht * l.quantity);
-      const tva = round2(ht * (l.tva / 100));
-      return {
-        quote_id: quoteId,
-        position: i + 1,
-        type: l.type,
-        description: l.description,
-        unit_price_ht: l.unit_price_ht,
-        quantity: l.quantity,
-        tva: l.tva,
-        line_total_ht: ht,
-        line_total_tva: tva,
-        line_total_ttc: round2(ht + tva),
-      };
-    });
-    const { error: insErr } = await supabaseAdmin.from("quote_lines").insert(lineRows);
-    if (insErr) {
-      await markGenerationFailed(insErr.message);
-      throw new Error("Enregistrement des lignes du devis impossible.");
-    }
+    const row = await loadQuote(rpcRow.quote_id);
 
     let pdfBytes: Uint8Array;
     try {
-      pdfBytes = await generateQuotePdf({
-        quoteNumber: quoteNo,
-        artisan: artisanSnapshot,
-        input: {
-          client_name: data.client_name,
-          client_address: data.client_address,
-          client_email: data.client_email,
-          client_phone: data.client_phone || undefined,
-          quote_date: data.quote_date,
-          valid_until: data.valid_until,
-          notes: data.notes || undefined,
-          lines: data.lines,
-        },
-        totals,
-      });
+      pdfBytes = await ensureQuotePdf(row);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      await markGenerationFailed(msg);
-      throw new Error("Génération du PDF du devis impossible.");
+      await supabaseAdmin
+        .from("quotes")
+        .update({ status: "generation_failed", generation_error: msg })
+        .eq("id", row.id);
+      throw err;
     }
 
-    const storagePath = `quotes/${data.quote_date.slice(0, 4)}/${quoteNo}.pdf`;
-    try {
-      await uploadDocumentPdf(storagePath, pdfBytes);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      await markGenerationFailed(msg);
-      throw new Error("Stockage du PDF du devis impossible.");
-    }
-
-    const { error: readyErr } = await supabaseAdmin
-      .from("quotes")
-      .update({ pdf_storage_path: storagePath, status: "ready" })
-      .eq("id", quoteId);
-    if (readyErr) {
-      await markGenerationFailed(readyErr.message);
-      throw new Error("Mise à jour du statut du devis impossible.");
+    if (row.status === "generating" || row.status === "generation_failed") {
+      await supabaseAdmin
+        .from("quotes")
+        .update({ status: "ready", generation_error: null })
+        .eq("id", row.id);
     }
 
     const pdfBase64 = bytesToBase64(pdfBytes);
-    const view = {
-      quoteNumber: quoteNo,
-      quoteDate: formatDateFR(data.quote_date),
-      validUntil: formatDateFR(data.valid_until),
-      totalHT: formatEUR(totals.totalHT),
-      totalTVA: formatEUR(totals.totalTVA),
-      totalTTC: formatEUR(totals.totalTTC),
-    };
 
-    const { sendQuoteEmails } = await import("@/lib/quotes-email.server");
+    // Retry-safe: only recipients that aren't already 'sent' are mailed.
     const { emailClient, emailArtisan, status } = await sendQuoteEmails({
-      quoteId,
-      quoteNo,
+      quoteId: row.id,
+      quoteNo: row.quote_number,
       pdfBase64,
-      view,
+      view: {
+        quoteNumber: row.quote_number,
+        quoteDate: formatDateFR(row.quote_date),
+        validUntil: formatDateFR(row.valid_until),
+        totalHT: formatEUR(Number(row.total_ht)),
+        totalTVA: formatEUR(Number(row.total_tva)),
+        totalTTC: formatEUR(Number(row.total_ttc)),
+      },
       client: {
-        name: data.client_name,
-        email: data.client_email,
-        phone: data.client_phone || undefined,
-        address: data.client_address,
+        name: row.client_name,
+        email: row.client_email,
+        phone: row.client_phone ?? undefined,
+        address: row.client_address,
       },
       replyTo: artisanSnapshot.email,
     });
 
     return {
-      quoteId,
-      quoteNumber: quoteNo,
+      quoteId: row.id,
+      quoteNumber: row.quote_number,
       pdfBase64,
       totals: {
-        totalHT: totals.totalHT,
-        totalTVA: totals.totalTVA,
-        totalTTC: totals.totalTTC,
+        totalHT: Number(row.total_ht),
+        totalTVA: Number(row.total_tva),
+        totalTTC: Number(row.total_ttc),
       },
       emailClient,
       emailArtisan,
-      reused: false,
+      reused: rpcRow.reused,
       status,
     };
   });
@@ -264,24 +126,13 @@ export const resendQuoteEmail = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { assertAdmin } = await import("@/lib/quotes.guards.server");
     await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { bytesToBase64, formatEUR, formatDateFR } = await import(
       "@/lib/documents.server"
     );
 
-    const { data: q, error } = await supabaseAdmin
-      .from("quotes")
-      .select("*")
-      .eq("id", data.quoteId)
-      .maybeSingle();
-    if (error || !q) throw new Error("Devis introuvable.");
-    if (!q.pdf_storage_path) throw new Error("PDF indisponible : régénérez le devis.");
-
-    const dl = await supabaseAdmin.storage
-      .from("request-attachments")
-      .download(q.pdf_storage_path);
-    if (dl.error || !dl.data) throw new Error("PDF indisponible : régénérez le devis.");
-    const pdfBase64 = bytesToBase64(new Uint8Array(await dl.data.arrayBuffer()));
+    const { loadQuote, ensureQuotePdf } = await import("@/lib/quotes-pdf.server");
+    const q = await loadQuote(data.quoteId);
+    const pdfBase64 = bytesToBase64(await ensureQuotePdf(q));
 
     const { sendQuoteEmails } = await import("@/lib/quotes-email.server");
     const result = await sendQuoteEmails({

@@ -71,7 +71,7 @@ function AppointmentPage() {
 
   const onSubmit = async (values: AppointmentInput) => {
     try {
-      await submit({
+      const res = await submit({
         data: {
           ...values,
           client_ipv4: await getIpv4(),
@@ -80,7 +80,11 @@ function AppointmentPage() {
       });
       setDone(true);
       reset();
-      toast.success("Rendez-vous demandé ! Nous confirmons votre créneau rapidement.");
+      toast.success(
+        res?.email_queued === false
+          ? "Rendez-vous bien enregistré ! L'accusé de réception par e-mail peut tarder."
+          : "Rendez-vous demandé ! Nous confirmons votre créneau rapidement.",
+      );
     } catch (err) {
       const msg = err instanceof Error && err.message.includes("Trop de demandes")
         ? err.message

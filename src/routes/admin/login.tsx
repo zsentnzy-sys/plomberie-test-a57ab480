@@ -67,9 +67,7 @@ function LoginPage() {
     e.preventDefault();
     setResetLoading(true);
     try {
-      await requestReset({
-        data: { email: resetEmail.trim(), origin: window.location.origin },
-      });
+      await requestReset({ data: { email: resetEmail.trim() } });
       setResetSent(true);
       toast.success("Si cette adresse correspond au compte administrateur, un email a été envoyé.");
     } catch {

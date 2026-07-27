@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { FileDown, Send, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { generateInvoice } from "@/lib/invoices.functions";
+import { generateInvoice, resendInvoiceEmail } from "@/lib/invoices.functions";
 import {
   LineItemsEditor,
   TotalsCard,
@@ -52,6 +52,37 @@ function FacturesPage() {
   const [lastInvoiceId, setLastInvoiceId] = useState<string | null>(null);
 
   const submit = useServerFn(generateInvoice);
+  const resend = useServerFn(resendInvoiceEmail);
+  const [resending, setResending] = useState(false);
+
+  async function handleResend() {
+    if (!lastInvoiceId || resending) return;
+    setResending(true);
+    try {
+      const res = await resend({ data: { invoiceId: lastInvoiceId } });
+      const clientOk = res.emailClient.status === "sent";
+      const artisanOk = res.emailArtisan.status === "sent";
+      if (clientOk && artisanOk) {
+        toast.success(`Facture ${res.invoiceNumber} : e-mails envoyés.`);
+        setLines([newLine()]);
+        setIdempotencyKey(crypto.randomUUID());
+        setLastInvoiceId(null);
+      } else {
+        const failed: string[] = [];
+        if (!clientOk) failed.push(`client (${res.emailClient.error ?? "erreur"})`);
+        if (!artisanOk) failed.push(`artisan (${res.emailArtisan.error ?? "erreur"})`);
+        toast.warning(
+          `Facture ${res.invoiceNumber} : échec d'envoi ${failed.join(" · ")}`,
+          { duration: 10000 },
+        );
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erreur inconnue";
+      toast.error(`Renvoi impossible : ${msg}`);
+    } finally {
+      setResending(false);
+    }
+  }
 
   const totals = useMemo(() => computeEditorTotals(lines), [lines]);
 
@@ -239,7 +270,28 @@ function FacturesPage() {
 
         <TotalsCard totals={totals} />
 
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-3">
+          {lastInvoiceId && (
+            <Button
+              type="button"
+              size="lg"
+              variant="outline"
+              onClick={handleResend}
+              disabled={resending || submitting}
+            >
+              {resending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Renvoi en cours…
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  Renvoyer les e-mails
+                </>
+              )}
+            </Button>
+          )}
           <Button type="submit" size="lg" disabled={submitting}>
             {submitting ? (
               <>

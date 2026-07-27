@@ -21,7 +21,8 @@ function generateToken(): string {
 /**
  * Render a registered transactional template and enqueue it for delivery.
  * Safe to call from public server functions — uses the service-role client.
- * Never throws; failures are logged so they don't block form submission.
+ * Never throws; failures are logged (and traced in email_send_log) so they
+ * don't block form submission. Returns true when the email was queued.
  */
 export async function enqueueTransactionalEmail(params: {
   templateName: string
@@ -29,17 +30,17 @@ export async function enqueueTransactionalEmail(params: {
   idempotencyKey: string
   templateData?: Record<string, unknown>
   replyTo?: string
-}): Promise<void> {
+}): Promise<boolean> {
   try {
     const { supabaseAdmin } = await import('@/integrations/supabase/client.server')
     const template = TEMPLATES[params.templateName]
     if (!template) {
       console.error('Unknown email template', params.templateName)
-      return
+      return false
     }
 
     const recipient = (template.to || params.recipientEmail).trim()
-    if (!recipient) return
+    if (!recipient) return false
     const normalizedEmail = recipient.toLowerCase()
     const messageId = crypto.randomUUID()
 
@@ -51,7 +52,7 @@ export async function enqueueTransactionalEmail(params: {
       .maybeSingle()
     if (suppErr) {
       console.error('Suppression check failed, skipping send', suppErr)
-      return
+      return false
     }
     if (suppressed) {
       await supabaseAdmin.from('email_send_log').insert({
@@ -60,7 +61,7 @@ export async function enqueueTransactionalEmail(params: {
         recipient_email: recipient,
         status: 'suppressed',
       })
-      return
+      return false
     }
 
     // Get or create an unsubscribe token (one per email)
@@ -130,8 +131,11 @@ export async function enqueueTransactionalEmail(params: {
         status: 'failed',
         error_message: 'Failed to enqueue email',
       })
+      return false
     }
+    return true
   } catch (err) {
     console.error('enqueueTransactionalEmail crashed', err)
+    return false
   }
 }
