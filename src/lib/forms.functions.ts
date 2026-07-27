@@ -165,7 +165,7 @@ export const submitQuote = createServerFn({ method: "POST" })
       urgency: data.urgency || null,
     }).select("id").single();
     if (error) throw new Error("Impossible d'enregistrer votre demande de devis.");
-    const { enqueueTransactionalEmail, OWNER_EMAIL } = await import("@/lib/email/dispatch.server");
+    const { enqueueTransactionalEmail, OWNER_EMAIL, PUBLIC_REPLY_TO_MAIL } = await import("@/lib/email/dispatch.server");
     const key = inserted?.id ?? data.email;
     const attachments = inserted?.id
       ? await associateAndBuildLinks({
@@ -225,7 +225,7 @@ export const submitAppointment = createServerFn({ method: "POST" })
       notes: data.notes || null,
     }).select("id").single();
     if (error) throw new Error("Impossible d'enregistrer votre rendez-vous.");
-    const { enqueueTransactionalEmail, OWNER_EMAIL } = await import("@/lib/email/dispatch.server");
+    const { enqueueTransactionalEmail, OWNER_EMAIL, PUBLIC_REPLY_TO_MAIL } = await import("@/lib/email/dispatch.server");
     const key = inserted?.id ?? data.email;
     const attachments = inserted?.id
       ? await associateAndBuildLinks({
