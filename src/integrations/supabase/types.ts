@@ -290,6 +290,7 @@ export type Database = {
           idempotency_key: string
           invoice_date: string
           invoice_number: string
+          payload_fingerprint: string | null
           payment_method: string
           pdf_storage_path: string | null
           sent_at: string | null
@@ -317,6 +318,7 @@ export type Database = {
           idempotency_key: string
           invoice_date: string
           invoice_number: string
+          payload_fingerprint?: string | null
           payment_method: string
           pdf_storage_path?: string | null
           sent_at?: string | null
@@ -344,6 +346,7 @@ export type Database = {
           idempotency_key?: string
           invoice_date?: string
           invoice_number?: string
+          payload_fingerprint?: string | null
           payment_method?: string
           pdf_storage_path?: string | null
           sent_at?: string | null
@@ -483,6 +486,7 @@ export type Database = {
           id: string
           idempotency_key: string
           notes: string | null
+          payload_fingerprint: string | null
           pdf_storage_path: string | null
           quote_date: string
           quote_number: string
@@ -512,6 +516,7 @@ export type Database = {
           id?: string
           idempotency_key: string
           notes?: string | null
+          payload_fingerprint?: string | null
           pdf_storage_path?: string | null
           quote_date: string
           quote_number: string
@@ -541,6 +546,7 @@ export type Database = {
           id?: string
           idempotency_key?: string
           notes?: string | null
+          payload_fingerprint?: string | null
           pdf_storage_path?: string | null
           quote_date?: string
           quote_number?: string
@@ -666,6 +672,27 @@ export type Database = {
           reused: boolean
         }[]
       }
+      create_invoice_with_lines_for_idempotency: {
+        Args: {
+          _artisan_snapshot: Json
+          _client_address: string
+          _client_email: string
+          _client_name: string
+          _client_phone: string
+          _idempotency_key: string
+          _invoice_date: string
+          _lines: Json
+          _payment_method: string
+        }
+        Returns: {
+          invoice_id: string
+          invoice_number: string
+          reused: boolean
+          total_ht: number
+          total_ttc: number
+          total_tva: number
+        }[]
+      }
       create_quote_for_idempotency: {
         Args: {
           _artisan_snapshot: Json
@@ -686,6 +713,29 @@ export type Database = {
           quote_id: string
           quote_number: string
           reused: boolean
+        }[]
+      }
+      create_quote_with_lines_for_idempotency: {
+        Args: {
+          _artisan_snapshot: Json
+          _client_address: string
+          _client_email: string
+          _client_name: string
+          _client_phone: string
+          _idempotency_key: string
+          _lines: Json
+          _notes: string
+          _quote_date: string
+          _quote_request_id: string
+          _valid_until: string
+        }
+        Returns: {
+          quote_id: string
+          quote_number: string
+          reused: boolean
+          total_ht: number
+          total_ttc: number
+          total_tva: number
         }[]
       }
       delete_email: {
@@ -714,6 +764,7 @@ export type Database = {
         Returns: number
       }
       next_invoice_number: { Args: never; Returns: string }
+      normalize_document_lines: { Args: { _lines: Json }; Returns: Json }
       read_email_batch: {
         Args: { batch_size: number; queue_name: string; vt: number }
         Returns: {
