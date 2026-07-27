@@ -3,8 +3,22 @@ import { z } from "zod";
 
 const emailSchema = z.object({
   email: z.string().trim().email().max(255),
-  origin: z.string().url().max(2048),
 });
+
+/** Canonical published origin — never taken from the browser. */
+const FALLBACK_ORIGIN = "https://plomberie-test.lovable.app";
+
+function resolveOrigin(): string {
+  const raw = (process.env.SITE_URL || process.env.PUBLIC_SITE_URL || "").trim();
+  if (!raw) return FALLBACK_ORIGIN;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return FALLBACK_ORIGIN;
+    return url.origin;
+  } catch {
+    return FALLBACK_ORIGIN;
+  }
+}
 
 /**
  * Envoie un email de réinitialisation de mot de passe UNIQUEMENT si l'adresse
@@ -34,10 +48,8 @@ export const requestAdminPasswordReset = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!roleRow) return { ok: true };
 
-    // Envoyer l'email de réinitialisation via le client admin (clé service_role
-    // fiablement injectée côté serveur). Évite toute dépendance à
-    // SUPABASE_PUBLISHABLE_KEY dans le worker déployé.
-    const redirectTo = `${data.origin}/admin/reset-password`;
+    // Redirection construite côté serveur uniquement.
+    const redirectTo = `${resolveOrigin()}/admin/reset-password`;
     await supabaseAdmin.auth.resetPasswordForEmail(email, { redirectTo });
 
     return { ok: true };
