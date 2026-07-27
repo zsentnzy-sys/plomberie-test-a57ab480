@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Json } from "@/integrations/supabase/types";
 import { quoteSchema } from "./quotes.schemas";
-import type { QuoteEmailStatus, QuoteGlobalStatus, GenerateQuoteResult } from "./quotes.types";
+import type { GenerateQuoteResult } from "./quotes.types";
 
 export type {
   QuoteEmailStatus,
