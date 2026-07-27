@@ -66,10 +66,14 @@ function ContactPage() {
 
   const onSubmit = async (values: ContactInput) => {
     try {
-      await submit({ data: { ...values, client_ipv4: await getIpv4() } });
+      const res = await submit({ data: { ...values, client_ipv4: await getIpv4() } });
       setDone(true);
       reset();
-      toast.success("Message envoyé ! Nous vous répondons rapidement.");
+      toast.success(
+        res?.email_queued === false
+          ? "Message bien enregistré ! L'accusé de réception par e-mail peut tarder."
+          : "Message envoyé ! Nous vous répondons rapidement.",
+      );
     } catch (err) {
       const msg = err instanceof Error && err.message.includes("Trop de demandes")
         ? err.message

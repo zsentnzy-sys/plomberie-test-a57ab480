@@ -77,7 +77,7 @@ function DevisPage() {
 
   const onSubmit = async (values: QuoteInput) => {
     try {
-      await submit({
+      const res = await submit({
         data: {
           ...values,
           client_ipv4: await getIpv4(),
@@ -86,7 +86,11 @@ function DevisPage() {
       });
       setDone(true);
       reset();
-      toast.success("Demande de devis envoyée ! Nous revenons vers vous rapidement.");
+      toast.success(
+        res?.email_queued === false
+          ? "Demande bien enregistrée ! L'accusé de réception par e-mail peut tarder."
+          : "Demande de devis envoyée ! Nous revenons vers vous rapidement.",
+      );
     } catch (err) {
       const msg = err instanceof Error && err.message.includes("Trop de demandes")
         ? err.message
