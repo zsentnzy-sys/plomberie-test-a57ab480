@@ -230,10 +230,6 @@ function RootComponent() {
     select: (state) => state.location.pathname,
   });
 
-  // Route diagnostique minimal
-  if (pathname === "/test") {
-    return <Outlet />;
-  }
   const isAdmin = pathname.startsWith("/admin");
 
   if (isAdmin) {

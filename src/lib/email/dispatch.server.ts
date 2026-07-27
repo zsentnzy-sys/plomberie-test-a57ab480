@@ -10,6 +10,8 @@ const FROM_LOCAL_PART = 'contact'
 /** Owner notifications always go here. */
 export const OWNER_EMAIL = 'sentnzy@gmail.com'
 
+export const PUBLIC_REPLY_TO_MAIL = 'contact@normalweb.cloud'
+
 function generateToken(): string {
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)

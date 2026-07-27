@@ -4,7 +4,7 @@ export const site = {
   phoneDisplay: "+33 6 00 00 00 00",
   phoneRaw: "+33600000000",
   whatsapp: "33600000000",
-  email: "contact@plomberie-dupont.fr",
+  email: "contact@normalweb.cloud",
   city: "Metz",
   zone: "Metz et 30 km alentour (Eurométropole de Metz, Montigny-lès-Metz, Woippy, Marly, Maizières-lès-Metz...)",
   address: "12 rue des Artisans, 57000 Metz",

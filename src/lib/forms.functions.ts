@@ -119,7 +119,7 @@ export const submitContact = createServerFn({ method: "POST" })
       message: data.message,
     }).select("id").single();
     if (error) throw new Error("Impossible d'enregistrer votre message.");
-    const { enqueueTransactionalEmail, OWNER_EMAIL } = await import("@/lib/email/dispatch.server");
+    const { enqueueTransactionalEmail, OWNER_EMAIL, PUBLIC_REPLY_TO_MAIL } = await import("@/lib/email/dispatch.server");
     const key = inserted?.id ?? data.email;
     const emailQueued = await queueEmails("contact", [
       enqueueTransactionalEmail({
@@ -142,7 +142,7 @@ export const submitContact = createServerFn({ method: "POST" })
         templateName: "contact-confirmation",
         recipientEmail: data.email,
         idempotencyKey: `contact-confirm-${key}`,
-        replyTo: OWNER_EMAIL,
+        replyTo: PUBLIC_REPLY_TO_MAIL,
         templateData: { name: data.name, message: data.message },
       }),
     ]);
@@ -198,7 +198,7 @@ export const submitQuote = createServerFn({ method: "POST" })
         templateName: "quote-confirmation",
         recipientEmail: data.email,
         idempotencyKey: `quote-confirm-${key}`,
-        replyTo: OWNER_EMAIL,
+        replyTo: PUBLIC_REPLY_TO_MAIL,
         templateData: {
           name: data.name,
           service_type: data.service_type,
@@ -258,7 +258,7 @@ export const submitAppointment = createServerFn({ method: "POST" })
         templateName: "appointment-confirmation",
         recipientEmail: data.email,
         idempotencyKey: `appointment-confirm-${key}`,
-        replyTo: OWNER_EMAIL,
+        replyTo: PUBLIC_REPLY_TO_MAIL,
         templateData: {
           name: data.name,
           service_type: data.service_type,

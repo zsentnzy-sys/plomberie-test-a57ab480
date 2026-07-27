@@ -21,7 +21,7 @@ export const ARTISAN_INFO: ArtisanInfo = {
   fullName: "Jean Dupont",
   address: "12 rue des Artisans\n57000 Metz",
   phone: "+33 6 00 00 00 00",
-  email: "contact@plomberie-dupont.fr",
+  email: "contact@normalweb.cloud",
   siret: "SIRET 000 000 000 00000 - APE 4322A",
   iban: "FR76 0000 0000 0000 0000 0000 000",
   bic: "AGRIFRPP",
