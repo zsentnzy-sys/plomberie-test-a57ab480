@@ -126,7 +126,6 @@ export const resendQuoteEmail = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { assertAdmin } = await import("@/lib/quotes.guards.server");
     await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { bytesToBase64, formatEUR, formatDateFR } = await import(
       "@/lib/documents.server"
     );
