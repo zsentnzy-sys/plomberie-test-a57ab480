@@ -82,6 +82,29 @@ async function enforceRateLimit(ip: string, formType: string): Promise<void> {
   await supabaseAdmin.from("form_rate_limit").insert({ ip_address: ip, form_type: formType });
 }
 
+/**
+ * Once the request row is persisted, an email failure must never surface as a
+ * failed submission (the visitor would re-submit and duplicate the request).
+ * Failures are logged here and traced in email_send_log by the dispatcher.
+ */
+async function queueEmails(
+  scope: string,
+  tasks: Array<Promise<boolean>>,
+): Promise<boolean> {
+  const results = await Promise.allSettled(tasks);
+  let allQueued = true;
+  for (const r of results) {
+    if (r.status === "rejected") {
+      allQueued = false;
+      console.error(`[forms] ${scope} email enqueue rejected`, r.reason);
+    } else if (r.value === false) {
+      allQueued = false;
+      console.error(`[forms] ${scope} email could not be queued`);
+    }
+  }
+  return allQueued;
+}
+
 export const submitContact = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => contactSchema.parse(data))
   .handler(async ({ data }) => {
@@ -98,7 +121,7 @@ export const submitContact = createServerFn({ method: "POST" })
     if (error) throw new Error("Impossible d'enregistrer votre message.");
     const { enqueueTransactionalEmail, OWNER_EMAIL } = await import("@/lib/email/dispatch.server");
     const key = inserted?.id ?? data.email;
-    await Promise.all([
+    const emailQueued = await queueEmails("contact", [
       enqueueTransactionalEmail({
         templateName: "contact-notification",
         recipientEmail: OWNER_EMAIL,
@@ -123,7 +146,7 @@ export const submitContact = createServerFn({ method: "POST" })
         templateData: { name: data.name, message: data.message },
       }),
     ]);
-    return { ok: true };
+    return { ok: true, email_queued: emailQueued };
   });
 
 export const submitQuote = createServerFn({ method: "POST" })
@@ -151,7 +174,7 @@ export const submitQuote = createServerFn({ method: "POST" })
           requestId: inserted.id,
         })
       : [];
-    await Promise.all([
+    const emailQueued = await queueEmails("quote", [
       enqueueTransactionalEmail({
         templateName: "quote-notification",
         recipientEmail: OWNER_EMAIL,
@@ -183,7 +206,7 @@ export const submitQuote = createServerFn({ method: "POST" })
         },
       }),
     ]);
-    return { ok: true, request_id: inserted?.id };
+    return { ok: true, request_id: inserted?.id, email_queued: emailQueued };
   });
 
 export const submitAppointment = createServerFn({ method: "POST" })
@@ -211,7 +234,7 @@ export const submitAppointment = createServerFn({ method: "POST" })
           requestId: inserted.id,
         })
       : [];
-    await Promise.all([
+    const emailQueued = await queueEmails("appointment", [
       enqueueTransactionalEmail({
         templateName: "appointment-notification",
         recipientEmail: OWNER_EMAIL,
@@ -244,5 +267,5 @@ export const submitAppointment = createServerFn({ method: "POST" })
         },
       }),
     ]);
-    return { ok: true, request_id: inserted?.id };
+    return { ok: true, request_id: inserted?.id, email_queued: emailQueued };
   });
