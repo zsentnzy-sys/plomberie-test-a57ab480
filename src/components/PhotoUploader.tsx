@@ -1,11 +1,12 @@
-import { useCallback, useId, useRef, useState } from "react";
-import { Camera, Loader2, Trash2, UploadCloud } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { Camera, Loader2, RefreshCw, Trash2, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export const PHOTO_MAX = 2;
 export const PHOTO_MAX_SIZE = 5 * 1024 * 1024;
 export const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp"]);
+const GENERIC_DELETE_ERROR = "La suppression de la photo a échoué. Réessayez.";
 
 function formatSize(b: number) {
   if (b < 1024) return `${b} o`;
@@ -13,14 +14,21 @@ function formatSize(b: number) {
   return `${(b / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
-interface Preview {
+type ItemState = "uploading" | "ready" | "error" | "deleting";
+
+interface Item {
+  key: string;
   file: File;
   url: string;
+  state: ItemState;
+  /** Server id — only set once the upload is confirmed. */
+  id: string | null;
+  error: string | null;
 }
 
 export interface PhotoUploaderProps {
   requestType: "quote" | "appointment";
-  uploadToken: string;
+  uploadSessionId: string;
   onStatusChange?: (status: {
     uploading: boolean;
     uploaded: boolean;
@@ -29,174 +37,187 @@ export interface PhotoUploaderProps {
   }) => void;
 }
 
-/** Client-side photo picker for request forms. Uploads on selection so the
- * submit path stays simple: form only needs to send the upload_token. */
-export function PhotoUploader({ requestType, uploadToken, onStatusChange }: PhotoUploaderProps) {
+/**
+ * Client-side photo picker. Each file is uploaded immediately to a temporary
+ * server-side location; nothing is considered attached until the server
+ * confirms it at form submission time.
+ */
+export function PhotoUploader({ uploadSessionId, onStatusChange }: PhotoUploaderProps) {
   const inputId = useId();
   const helpId = useId();
   const errorId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [previews, setPreviews] = useState<Preview[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploaded, setUploaded] = useState(false);
+  const [items, setItems] = useState<Item[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const itemsRef = useRef<Item[]>([]);
+  itemsRef.current = items;
 
   const emit = useCallback(
-    (next: { uploading: boolean; uploaded: boolean; count: number; error: string | null }) => {
-      onStatusChange?.(next);
+    (list: Item[], err: string | null) => {
+      const uploading = list.some((i) => i.state === "uploading" || i.state === "deleting");
+      const readyCount = list.filter((i) => i.state === "ready").length;
+      onStatusChange?.({
+        uploading,
+        uploaded: readyCount > 0 && !uploading,
+        count: readyCount,
+        error: err,
+      });
     },
     [onStatusChange],
   );
 
-  const validate = (files: File[]): string | null => {
-    if (files.length > PHOTO_MAX) return `${PHOTO_MAX} photos maximum.`;
-    for (const f of files) {
-      if (f.size === 0) return "Un fichier est vide.";
-      if (f.size > PHOTO_MAX_SIZE) return `« ${f.name} » dépasse 5 Mo.`;
-      if (!ALLOWED.has(f.type)) return `Format non supporté (JPEG, PNG ou WebP uniquement).`;
-    }
+  const update = useCallback(
+    (updater: (prev: Item[]) => Item[], err?: string | null) => {
+      setItems((prev) => {
+        const next = updater(prev);
+        emit(next, err === undefined ? null : err);
+        return next;
+      });
+    },
+    [emit],
+  );
+
+  const validate = (file: File): string | null => {
+    if (file.size === 0) return "Ce fichier est vide.";
+    if (file.size > PHOTO_MAX_SIZE) return `« ${file.name} » dépasse 5 Mo.`;
+    if (!ALLOWED.has(file.type)) return "Format non supporté (JPEG, PNG ou WebP uniquement).";
     return null;
   };
 
-  const upload = async (files: File[]) => {
-    setError(null);
-    setUploading(true);
-    emit({ uploading: true, uploaded: false, count: files.length, error: null });
-    try {
-      const fd = new FormData();
-      fd.append("upload_token", uploadToken);
-      fd.append("request_type", requestType);
-      for (const f of files) fd.append("files", f, f.name);
-      const res = await fetch("/api/attachments/upload", { method: "POST", body: fd });
-      const json = (await res.json().catch(() => null)) as { error?: string } | null;
-      if (!res.ok) {
-        throw new Error(json?.error || "L'envoi des photos a échoué.");
+  const uploadOne = useCallback(
+    async (item: Item) => {
+      try {
+        const fd = new FormData();
+        fd.append("upload_session_id", uploadSessionId);
+        fd.append("files", item.file, item.file.name);
+        const res = await fetch("/api/attachments/upload", { method: "POST", body: fd });
+        const json = (await res.json().catch(() => null)) as
+          | { error?: string; files?: Array<{ id: string }> }
+          | null;
+        if (!res.ok || !json?.files?.[0]?.id) {
+          throw new Error(json?.error || "L'envoi de la photo a échoué.");
+        }
+        const id = json.files[0].id;
+        update((prev) =>
+          prev.map((i) => (i.key === item.key ? { ...i, state: "ready", id, error: null } : i)),
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Erreur d'envoi.";
+        setError(msg);
+        update(
+          (prev) => prev.map((i) => (i.key === item.key ? { ...i, state: "error", error: msg } : i)),
+          msg,
+        );
       }
-      setUploaded(true);
-      emit({ uploading: false, uploaded: true, count: files.length, error: null });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erreur d'envoi.";
-      setError(msg);
-      setUploaded(false);
-      // Revoke previews on failure
-      for (const p of previews) URL.revokeObjectURL(p.url);
-      setPreviews([]);
-      if (inputRef.current) inputRef.current.value = "";
-      emit({ uploading: false, uploaded: false, count: 0, error: msg });
-    } finally {
-      setUploading(false);
-    }
-  };
+    },
+    [update, uploadSessionId],
+  );
 
   const onChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const list = e.target.files ? Array.from(e.target.files) : [];
+    e.target.value = "";
     if (list.length === 0) return;
-    const err = validate(list);
-    if (err) {
-      setError(err);
-      e.target.value = "";
-      emit({ uploading: false, uploaded: false, count: 0, error: err });
+
+    const live = itemsRef.current.filter((i) => i.state !== "error");
+    if (live.length + list.length > PHOTO_MAX) {
+      const msg = `${PHOTO_MAX} photos maximum.`;
+      setError(msg);
+      emit(itemsRef.current, msg);
       return;
     }
-    // Revoke any previous previews
-    for (const p of previews) URL.revokeObjectURL(p.url);
-    const next = list.map((f) => ({ file: f, url: URL.createObjectURL(f) }));
-    setPreviews(next);
-    await upload(list);
+    for (const f of list) {
+      const err = validate(f);
+      if (err) {
+        setError(err);
+        emit(itemsRef.current, err);
+        return;
+      }
+    }
+
+    setError(null);
+    const added: Item[] = list.map((f) => ({
+      key: `${f.name}-${f.size}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file: f,
+      url: URL.createObjectURL(f),
+      state: "uploading",
+      id: null,
+      error: null,
+    }));
+    update((prev) => [...prev, ...added]);
+    for (const item of added) await uploadOne(item);
   };
 
-  const deleteUploadedPhotos = async () => {
-    const response = await fetch("/api/attachments/upload", {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        upload_token: uploadToken,
-        request_type: requestType,
-      }),
-    });
+  const retry = async (key: string) => {
+    const item = itemsRef.current.find((i) => i.key === key);
+    if (!item) return;
+    setError(null);
+    update((prev) =>
+      prev.map((i) => (i.key === key ? { ...i, state: "uploading", error: null } : i)),
+    );
+    await uploadOne({ ...item, state: "uploading" });
+  };
 
-    const json = (await response.json().catch(() => null)) as {
-      error?: string;
-      deleted?: number;
-    } | null;
+  const removeItem = async (key: string) => {
+    const item = itemsRef.current.find((i) => i.key === key);
+    if (!item || item.state === "deleting" || item.state === "uploading") return;
+    setError(null);
 
-    if (!response.ok) {
-      throw new Error(
-        json?.error || "La suppression des photos a échoué.",
+    // Never uploaded (or failed): drop locally, nothing on the server.
+    if (!item.id) {
+      URL.revokeObjectURL(item.url);
+      update((prev) => prev.filter((i) => i.key !== key));
+      return;
+    }
+
+    update((prev) => prev.map((i) => (i.key === key ? { ...i, state: "deleting" } : i)));
+    try {
+      const res = await fetch("/api/attachments/upload", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ upload_session_id: uploadSessionId, file_id: item.id }),
+      });
+      if (!res.ok) throw new Error(GENERIC_DELETE_ERROR);
+      URL.revokeObjectURL(item.url);
+      update((prev) => prev.filter((i) => i.key !== key));
+    } catch {
+      // Keep the preview: the file is still there server-side.
+      setError(GENERIC_DELETE_ERROR);
+      update(
+        (prev) => prev.map((i) => (i.key === key ? { ...i, state: "ready" } : i)),
+        GENERIC_DELETE_ERROR,
       );
     }
   };
 
   const removeAll = async () => {
-    if (uploading || deleting) return;
-
-    setError(null);
-    setDeleting(true);
-
-    /*
-    * On réutilise uploading=true dans le statut envoyé au parent afin
-    * de désactiver le bouton d'envoi du formulaire pendant la suppression.
-    */
-    setUploading(true);
-
-    emit({
-      uploading: true,
-      uploaded,
-      count: uploaded ? previews.length : 0,
-      error: null,
-    });
-
-    try {
-      /*
-      * Important : on supprime d'abord côté serveur.
-      * Les aperçus restent visibles si la suppression échoue.
-      */
-      await deleteUploadedPhotos();
-
-      for (const preview of previews) {
-        URL.revokeObjectURL(preview.url);
-      }
-
-      setPreviews([]);
-      setUploaded(false);
-      setError(null);
-
-      if (inputRef.current) {
-        inputRef.current.value = "";
-      }
-
-      emit({
-        uploading: false,
-        uploaded: false,
-        count: 0,
-        error: null,
-      });
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "La suppression des photos a échoué.";
-
-      /*
-      * Ne pas vider previews ici :
-      * l'utilisateur doit voir que les fichiers sont encore présents.
-      */
-      setError(message);
-
-      emit({
-        uploading: false,
-        uploaded,
-        count: uploaded ? previews.length : 0,
-        error: message,
-      });
-    } finally {
-      setDeleting(false);
-      setUploading(false);
+    for (const item of [...itemsRef.current]) {
+      await removeItem(item.key);
     }
   };
+
+  // Opportunistic cleanup when the visitor leaves. Best-effort only: the
+  // scheduled server-side purge is the real guarantee.
+  useEffect(() => {
+    const onPageHide = () => {
+      const hasTemp = itemsRef.current.some((i) => i.id);
+      if (!hasTemp) return;
+      try {
+        fetch("/api/attachments/upload", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ upload_session_id: uploadSessionId }),
+          keepalive: true,
+        }).catch(() => undefined);
+      } catch {
+        // ignore — purge will reclaim the files
+      }
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [uploadSessionId]);
+
+  const busy = items.some((i) => i.state === "uploading" || i.state === "deleting");
+  const readyCount = items.filter((i) => i.state === "ready").length;
 
   return (
     <div className="space-y-3">
@@ -211,11 +232,11 @@ export function PhotoUploader({ requestType, uploadToken, onStatusChange }: Phot
           accept={PHOTO_ACCEPT}
           multiple
           onChange={onChange}
-          disabled={uploading}
+          disabled={busy}
           className="sr-only"
           aria-invalid={!!error}
         />
-        {previews.length === 0 ? (
+        {items.length === 0 ? (
           <label
             htmlFor={inputId}
             className="flex cursor-pointer flex-col items-center justify-center gap-2 py-4 text-center"
@@ -233,29 +254,78 @@ export function PhotoUploader({ requestType, uploadToken, onStatusChange }: Phot
         ) : (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              {previews.map((p, i) => (
-                <div key={p.url} className="relative overflow-hidden rounded-lg border border-border/60 bg-background">
+              {items.map((item, i) => (
+                <div
+                  key={item.key}
+                  className="relative overflow-hidden rounded-lg border border-border/60 bg-background"
+                >
                   <img
-                    src={p.url}
-                    alt={`Aperçu photo ${i + 1} — ${p.file.name}`}
+                    src={item.url}
+                    alt={`Aperçu photo ${i + 1} — ${item.file.name}`}
                     className="h-32 w-full object-cover"
                     loading="lazy"
                   />
                   <div className="border-t border-border/40 bg-card px-2 py-1.5">
-                    <p className="truncate text-xs font-medium text-foreground">{p.file.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{formatSize(p.file.size)}</p>
+                    <p className="truncate text-xs font-medium text-foreground">{item.file.name}</p>
+                    <p className="text-[11px] text-muted-foreground">{formatSize(item.file.size)}</p>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium">
+                        {item.state === "uploading" && (
+                          <span className="inline-flex items-center gap-1 text-muted-foreground">
+                            <Loader2 className="h-3 w-3 animate-spin" /> Envoi…
+                          </span>
+                        )}
+                        {item.state === "deleting" && (
+                          <span className="inline-flex items-center gap-1 text-muted-foreground">
+                            <Loader2 className="h-3 w-3 animate-spin" /> Suppression…
+                          </span>
+                        )}
+                        {item.state === "ready" && <span className="text-green-700">✓ Prête</span>}
+                        {item.state === "error" && (
+                          <span className="text-destructive">Échec de l'envoi</span>
+                        )}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        {item.state === "error" && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2"
+                            onClick={() => retry(item.key)}
+                            aria-label={`Réessayer l'envoi de ${item.file.name}`}
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2"
+                          onClick={() => removeItem(item.key)}
+                          disabled={item.state === "uploading" || item.state === "deleting"}
+                          aria-label={`Retirer ${item.file.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </span>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
             <div className="flex items-center justify-between gap-3 text-xs">
               <span className="inline-flex items-center gap-1.5 font-medium">
-                {uploading ? (
+                {busy ? (
                   <>
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Envoi en cours…
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Traitement en cours…
                   </>
-                ) : uploaded ? (
-                  <span className="text-green-700">✓ Photos prêtes à être envoyées</span>
+                ) : readyCount > 0 ? (
+                  <span className="text-green-700">
+                    ✓ {readyCount} photo{readyCount > 1 ? "s" : ""} prête
+                    {readyCount > 1 ? "s" : ""} à être envoyée{readyCount > 1 ? "s" : ""}
+                  </span>
                 ) : (
                   <span className="text-muted-foreground">En attente</span>
                 )}
@@ -265,7 +335,7 @@ export function PhotoUploader({ requestType, uploadToken, onStatusChange }: Phot
                 variant="ghost"
                 size="sm"
                 onClick={removeAll}
-                disabled={uploading}
+                disabled={busy}
                 aria-label="Supprimer les photos sélectionnées"
               >
                 <Trash2 className="mr-1 h-4 w-4" /> Tout retirer
