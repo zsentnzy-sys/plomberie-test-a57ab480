@@ -124,10 +124,6 @@ function randomUuid(): string {
   return crypto.randomUUID();
 }
 
-function randomUuid(): string {
-  return crypto.randomUUID();
-}
-
 export interface StoredTempFile {
   id: string;
   filename: string;
