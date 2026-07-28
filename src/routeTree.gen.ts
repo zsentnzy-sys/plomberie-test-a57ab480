@@ -36,6 +36,7 @@ import { Route as AdminLoginRouteImport } from './routes/admin/login'
 import { Route as AdminFacturesRouteImport } from './routes/admin/factures'
 import { Route as AdminDevisRouteImport } from './routes/admin/devis'
 import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
+import { Route as ApiPublicCleanupUploadsRouteImport } from './routes/api/public/cleanup-uploads'
 import { Route as ApiAttachmentsUploadRouteImport } from './routes/api/attachments/upload'
 import { Route as AdminDevisIdRouteImport } from './routes/admin/devis_.$id'
 import { Route as LovableEmailTransactionalSendRouteImport } from './routes/lovable/email/transactional/send'
@@ -178,6 +179,11 @@ const LovableEmailSuppressionRoute = LovableEmailSuppressionRouteImport.update({
   path: '/lovable/email/suppression',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicCleanupUploadsRoute = ApiPublicCleanupUploadsRouteImport.update({
+  id: '/api/public/cleanup-uploads',
+  path: '/api/public/cleanup-uploads',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAttachmentsUploadRoute = ApiAttachmentsUploadRouteImport.update({
   id: '/api/attachments/upload',
   path: '/api/attachments/upload',
@@ -236,6 +242,7 @@ export interface FileRoutesByFullPath {
   '/services/': typeof ServicesIndexRoute
   '/admin/devis/$id': typeof AdminDevisIdRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
+  '/api/public/cleanup-uploads': typeof ApiPublicCleanupUploadsRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
@@ -268,6 +275,7 @@ export interface FileRoutesByTo {
   '/services': typeof ServicesIndexRoute
   '/admin/devis/$id': typeof AdminDevisIdRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
+  '/api/public/cleanup-uploads': typeof ApiPublicCleanupUploadsRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
@@ -303,6 +311,7 @@ export interface FileRoutesById {
   '/services/': typeof ServicesIndexRoute
   '/admin/devis_/$id': typeof AdminDevisIdRoute
   '/api/attachments/upload': typeof ApiAttachmentsUploadRoute
+  '/api/public/cleanup-uploads': typeof ApiPublicCleanupUploadsRoute
   '/lovable/email/suppression': typeof LovableEmailSuppressionRoute
   '/lovable/email/queue/process': typeof LovableEmailQueueProcessRoute
   '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
@@ -339,6 +348,7 @@ export interface FileRouteTypes {
     | '/services/'
     | '/admin/devis/$id'
     | '/api/attachments/upload'
+    | '/api/public/cleanup-uploads'
     | '/lovable/email/suppression'
     | '/lovable/email/queue/process'
     | '/lovable/email/transactional/preview'
@@ -371,6 +381,7 @@ export interface FileRouteTypes {
     | '/services'
     | '/admin/devis/$id'
     | '/api/attachments/upload'
+    | '/api/public/cleanup-uploads'
     | '/lovable/email/suppression'
     | '/lovable/email/queue/process'
     | '/lovable/email/transactional/preview'
@@ -405,6 +416,7 @@ export interface FileRouteTypes {
     | '/services/'
     | '/admin/devis_/$id'
     | '/api/attachments/upload'
+    | '/api/public/cleanup-uploads'
     | '/lovable/email/suppression'
     | '/lovable/email/queue/process'
     | '/lovable/email/transactional/preview'
@@ -426,6 +438,7 @@ export interface RootRouteChildren {
   UnsubscribeRoute: typeof UnsubscribeRoute
   EmailUnsubscribeRoute: typeof EmailUnsubscribeRoute
   ApiAttachmentsUploadRoute: typeof ApiAttachmentsUploadRoute
+  ApiPublicCleanupUploadsRoute: typeof ApiPublicCleanupUploadsRoute
   LovableEmailSuppressionRoute: typeof LovableEmailSuppressionRoute
   LovableEmailQueueProcessRoute: typeof LovableEmailQueueProcessRoute
   LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
@@ -623,6 +636,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailSuppressionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/cleanup-uploads': {
+      id: '/api/public/cleanup-uploads'
+      path: '/api/public/cleanup-uploads'
+      fullPath: '/api/public/cleanup-uploads'
+      preLoaderRoute: typeof ApiPublicCleanupUploadsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/attachments/upload': {
       id: '/api/attachments/upload'
       path: '/api/attachments/upload'
@@ -724,6 +744,7 @@ const rootRouteChildren: RootRouteChildren = {
   UnsubscribeRoute: UnsubscribeRoute,
   EmailUnsubscribeRoute: EmailUnsubscribeRoute,
   ApiAttachmentsUploadRoute: ApiAttachmentsUploadRoute,
+  ApiPublicCleanupUploadsRoute: ApiPublicCleanupUploadsRoute,
   LovableEmailSuppressionRoute: LovableEmailSuppressionRoute,
   LovableEmailQueueProcessRoute: LovableEmailQueueProcessRoute,
   LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,
