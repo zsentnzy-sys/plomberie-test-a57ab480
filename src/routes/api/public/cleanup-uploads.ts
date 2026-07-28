@@ -1,15 +1,20 @@
 import { createFileRoute } from '@tanstack/react-router'
 
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
+}
+
 /**
  * Scheduled purge of abandoned temporary uploads (pg_cron, hourly).
- * Caller is authenticated with the project publishable key.
+ * Caller must present the dedicated cleanup secret as a bearer token.
  */
 async function handle(request: Request) {
-  const provided =
-    request.headers.get('apikey') ||
-    (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '')
-  const expected = process.env.SUPABASE_PUBLISHABLE_KEY || ''
-  if (!expected || provided !== expected) {
+  const provided = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim()
+  const expected = (process.env.UPLOAD_CLEANUP_SECRET || '').trim()
+  if (!expected || !provided || !safeEqual(provided, expected)) {
     return new Response('Unauthorized', { status: 401 })
   }
 

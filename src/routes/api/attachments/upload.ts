@@ -42,7 +42,6 @@ export const Route = createFileRoute('/api/attachments/upload')({
           const {
             validateFiles,
             storeTemporaryFiles,
-            countSessionFiles,
             AttachmentValidationError,
           } = await import('@/lib/attachments.server')
           const { supabaseAdmin } = await import('@/integrations/supabase/client.server')
@@ -68,8 +67,7 @@ export const Route = createFileRoute('/api/attachments/upload')({
             await supabaseAdmin.from('form_rate_limit').insert({ ip_address: ip, form_type: 'attachment' })
           }
 
-          const existing = await countSessionFiles(supabaseAdmin, sessionId)
-          if (existing + files.length > MAX_FILES_PER_SESSION) {
+          if (files.length > MAX_FILES_PER_SESSION) {
             return badRequest(`Vous pouvez joindre ${MAX_FILES_PER_SESSION} photos maximum.`)
           }
 
@@ -83,11 +81,20 @@ export const Route = createFileRoute('/api/attachments/upload')({
             throw err
           }
 
-          const stored = await storeTemporaryFiles(supabaseAdmin, {
-            uploadSessionId: sessionId,
-            files: validated,
-          })
-          return Response.json({ ok: true, files: stored })
+          // The per-session limit is enforced transactionally inside
+          // storeTemporaryFiles (advisory lock on the session id).
+          try {
+            const stored = await storeTemporaryFiles(supabaseAdmin, {
+              uploadSessionId: sessionId,
+              files: validated,
+            })
+            return Response.json({ ok: true, files: stored })
+          } catch (err) {
+            if (err instanceof AttachmentValidationError) {
+              return badRequest(err.message)
+            }
+            throw err
+          }
         } catch (err) {
           console.error('attachment upload failed', err)
           return badRequest('L\u2019envoi des photos a \u00e9chou\u00e9.', 500)
@@ -109,18 +116,23 @@ export const Route = createFileRoute('/api/attachments/upload')({
             return badRequest('Session d\u2019envoi invalide.')
           }
 
-          const { deleteTemporaryFile, abandonUploadSession } = await import(
+          const { deleteTemporaryFileDetailed, abandonUploadSession } = await import(
             '@/lib/attachments.server'
           )
           const { supabaseAdmin } = await import('@/integrations/supabase/client.server')
 
           if (fileId) {
             if (!UUID_RE.test(fileId)) return badRequest('Fichier invalide.')
-            const ok = await deleteTemporaryFile(supabaseAdmin, {
+            const outcome = await deleteTemporaryFileDetailed(supabaseAdmin, {
               uploadSessionId: sessionId,
               fileId,
             })
-            if (!ok) return badRequest('Ce fichier ne peut plus \u00eatre supprim\u00e9.', 409)
+            if (outcome === 'locked') {
+              return badRequest('Ce fichier ne peut plus \u00eatre supprim\u00e9.', 409)
+            }
+            if (outcome === 'failed') {
+              return badRequest('La suppression de la photo a \u00e9chou\u00e9.', 500)
+            }
             return Response.json({ ok: true, deleted: 1 })
           }
 

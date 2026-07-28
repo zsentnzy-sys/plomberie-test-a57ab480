@@ -630,46 +630,61 @@ export type Database = {
         Row: {
           confirmed_at: string | null
           created_at: string
+          delete_attempts: number
           deleted_at: string | null
           entity_id: string | null
           entity_type: string | null
           id: string
+          last_delete_error: string | null
           mime_type: string | null
+          next_delete_retry_at: string | null
           original_filename: string
           owner_user_id: string | null
+          reservation_expires_at: string | null
           size_bytes: number | null
           status: string
           storage_path: string
+          temporary_storage_path: string | null
           upload_session_id: string
         }
         Insert: {
           confirmed_at?: string | null
           created_at?: string
+          delete_attempts?: number
           deleted_at?: string | null
           entity_id?: string | null
           entity_type?: string | null
           id?: string
+          last_delete_error?: string | null
           mime_type?: string | null
+          next_delete_retry_at?: string | null
           original_filename: string
           owner_user_id?: string | null
+          reservation_expires_at?: string | null
           size_bytes?: number | null
           status?: string
           storage_path: string
+          temporary_storage_path?: string | null
           upload_session_id: string
         }
         Update: {
           confirmed_at?: string | null
           created_at?: string
+          delete_attempts?: number
           deleted_at?: string | null
           entity_id?: string | null
           entity_type?: string | null
           id?: string
+          last_delete_error?: string | null
           mime_type?: string | null
+          next_delete_retry_at?: string | null
           original_filename?: string
           owner_user_id?: string | null
+          reservation_expires_at?: string | null
           size_bytes?: number | null
           status?: string
           storage_path?: string
+          temporary_storage_path?: string | null
           upload_session_id?: string
         }
         Relationships: []
@@ -795,6 +810,17 @@ export type Database = {
         Args: { payload: Json; queue_name: string }
         Returns: number
       }
+      finalize_uploaded_file: {
+        Args: {
+          _entity_id: string
+          _entity_type: string
+          _file_id: string
+          _final_path: string
+          _legacy_request_type: string
+          _temporary_path: string
+        }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -819,6 +845,18 @@ export type Database = {
           message: Json
           msg_id: number
           read_ct: number
+        }[]
+      }
+      reserve_upload_files: {
+        Args: {
+          _files: Json
+          _max_files?: number
+          _ttl_minutes?: number
+          _upload_session_id: string
+        }
+        Returns: {
+          id: string
+          storage_path: string
         }[]
       }
     }
