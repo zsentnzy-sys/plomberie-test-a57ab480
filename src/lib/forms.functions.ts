@@ -167,9 +167,9 @@ export const submitQuote = createServerFn({ method: "POST" })
     const { enqueueTransactionalEmail, OWNER_EMAIL, PUBLIC_REPLY_TO_MAIL } = await import("@/lib/email/dispatch.server");
     const key = inserted?.id ?? data.email;
     const attachments = inserted?.id
-      ? await associateAndBuildLinks({
-          uploadToken: (data.upload_token || "").trim(),
-          requestType: "quote",
+      ? await confirmAndBuildLinks({
+          uploadSessionId: (data.upload_session_id || "").trim(),
+          entityType: "quote_request",
           requestId: inserted.id,
         })
       : [];
@@ -227,9 +227,9 @@ export const submitAppointment = createServerFn({ method: "POST" })
     const { enqueueTransactionalEmail, OWNER_EMAIL, PUBLIC_REPLY_TO_MAIL } = await import("@/lib/email/dispatch.server");
     const key = inserted?.id ?? data.email;
     const attachments = inserted?.id
-      ? await associateAndBuildLinks({
-          uploadToken: (data.upload_token || "").trim(),
-          requestType: "appointment",
+      ? await confirmAndBuildLinks({
+          uploadSessionId: (data.upload_session_id || "").trim(),
+          entityType: "appointment",
           requestId: inserted.id,
         })
       : [];
