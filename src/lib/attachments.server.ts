@@ -8,6 +8,22 @@ export const MAX_TOTAL_SIZE = 10 * 1024 * 1024;
 export const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp"] as const;
 export const BUCKET = "request-attachments";
 export const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
+export const PREVIEW_URL_TTL_SECONDS = 60 * 10; // 10 minutes
+export const TEMP_RETENTION_HOURS = 24;
+
+export type EntityType = "quote_request" | "appointment" | "contact_request";
+
+const ENTITY_PREFIX: Record<EntityType, string> = {
+  quote_request: "quote-requests",
+  appointment: "appointments",
+  contact_request: "contact-requests",
+};
+
+/** request_attachments keeps its legacy vocabulary. */
+const LEGACY_REQUEST_TYPE: Partial<Record<EntityType, "quote" | "appointment">> = {
+  quote_request: "quote",
+  appointment: "appointment",
+};
 
 export type SniffedMime = "image/jpeg" | "image/png" | "image/webp" | null;
 
