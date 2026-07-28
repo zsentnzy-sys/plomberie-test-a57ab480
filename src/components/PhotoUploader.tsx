@@ -52,30 +52,23 @@ export function PhotoUploader({ uploadSessionId, onStatusChange }: PhotoUploader
   const itemsRef = useRef<Item[]>([]);
   itemsRef.current = items;
 
-  const emit = useCallback(
-    (list: Item[], err: string | null) => {
-      const uploading = list.some((i) => i.state === "uploading" || i.state === "deleting");
-      const readyCount = list.filter((i) => i.state === "ready").length;
-      onStatusChange?.({
-        uploading,
-        uploaded: readyCount > 0 && !uploading,
-        count: readyCount,
-        error: err,
-      });
-    },
-    [onStatusChange],
-  );
+  // Notify the parent form after commit, never during render.
+  const statusRef = useRef(onStatusChange);
+  statusRef.current = onStatusChange;
+  useEffect(() => {
+    const uploading = items.some((i) => i.state === "uploading" || i.state === "deleting");
+    const readyCount = items.filter((i) => i.state === "ready").length;
+    statusRef.current?.({
+      uploading,
+      uploaded: readyCount > 0 && !uploading,
+      count: readyCount,
+      error,
+    });
+  }, [items, error]);
 
-  const update = useCallback(
-    (updater: (prev: Item[]) => Item[], err?: string | null) => {
-      setItems((prev) => {
-        const next = updater(prev);
-        emit(next, err === undefined ? null : err);
-        return next;
-      });
-    },
-    [emit],
-  );
+  const update = useCallback((updater: (prev: Item[]) => Item[]) => {
+    setItems(updater);
+  }, []);
 
   const validate = (file: File): string | null => {
     if (file.size === 0) return "Ce fichier est vide.";
@@ -104,9 +97,8 @@ export function PhotoUploader({ uploadSessionId, onStatusChange }: PhotoUploader
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Erreur d'envoi.";
         setError(msg);
-        update(
-          (prev) => prev.map((i) => (i.key === item.key ? { ...i, state: "error", error: msg } : i)),
-          msg,
+        update((prev) =>
+          prev.map((i) => (i.key === item.key ? { ...i, state: "error", error: msg } : i)),
         );
       }
     },
@@ -122,14 +114,12 @@ export function PhotoUploader({ uploadSessionId, onStatusChange }: PhotoUploader
     if (live.length + list.length > PHOTO_MAX) {
       const msg = `${PHOTO_MAX} photos maximum.`;
       setError(msg);
-      emit(itemsRef.current, msg);
       return;
     }
     for (const f of list) {
       const err = validate(f);
       if (err) {
         setError(err);
-        emit(itemsRef.current, err);
         return;
       }
     }
@@ -182,10 +172,7 @@ export function PhotoUploader({ uploadSessionId, onStatusChange }: PhotoUploader
     } catch {
       // Keep the preview: the file is still there server-side.
       setError(GENERIC_DELETE_ERROR);
-      update(
-        (prev) => prev.map((i) => (i.key === key ? { ...i, state: "ready" } : i)),
-        GENERIC_DELETE_ERROR,
-      );
+      update((prev) => prev.map((i) => (i.key === key ? { ...i, state: "ready" } : i)));
     }
   };
 
