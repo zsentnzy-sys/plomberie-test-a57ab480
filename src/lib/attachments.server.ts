@@ -8,6 +8,22 @@ export const MAX_TOTAL_SIZE = 10 * 1024 * 1024;
 export const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp"] as const;
 export const BUCKET = "request-attachments";
 export const SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
+export const PREVIEW_URL_TTL_SECONDS = 60 * 10; // 10 minutes
+export const TEMP_RETENTION_HOURS = 24;
+
+export type EntityType = "quote_request" | "appointment" | "contact_request";
+
+const ENTITY_PREFIX: Record<EntityType, string> = {
+  quote_request: "quote-requests",
+  appointment: "appointments",
+  contact_request: "contact-requests",
+};
+
+/** request_attachments keeps its legacy vocabulary. */
+const LEGACY_REQUEST_TYPE: Partial<Record<EntityType, "quote" | "appointment">> = {
+  quote_request: "quote",
+  appointment: "appointment",
+};
 
 export type SniffedMime = "image/jpeg" | "image/png" | "image/webp" | null;
 
@@ -108,138 +124,300 @@ function randomUuid(): string {
   return crypto.randomUUID();
 }
 
-/** Store validated files under <type>/<request_id>/<uuid>.<ext>. Rollback on partial failure. */
-export async function storeAttachments(
+export interface StoredTempFile {
+  id: string;
+  filename: string;
+  size: number;
+  mime: string;
+  previewUrl: string | null;
+}
+
+/**
+ * Upload validated files under temporary/<sessionId>/<uuid>.<ext> and track them
+ * in uploaded_files with status='temporary'. Storage objects whose DB row fails
+ * to insert are removed immediately so no orphan can survive the request.
+ */
+export async function storeTemporaryFiles(
   supabase: SupabaseClient<any, any>,
-  params: { requestType: "quote" | "appointment"; requestId: string; files: ValidatedFile[] },
-): Promise<
-  Array<{ id: string; storage_path: string; original_filename: string; mime_type: string; size_bytes: number }>
-> {
-  const uploaded: string[] = [];
-  const insertedIds: string[] = [];
-  const rows: Array<{
-    id: string;
+  params: { uploadSessionId: string; files: ValidatedFile[] },
+): Promise<StoredTempFile[]> {
+  const stored: StoredTempFile[] = [];
+  for (const f of params.files) {
+    const path = `temporary/${params.uploadSessionId}/${randomUuid()}.${f.ext}`;
+    const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, f.bytes, {
+      contentType: f.mime,
+      upsert: false,
+    });
+    if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
+
+    const { data: inserted, error: dbErr } = await supabase
+      .from("uploaded_files")
+      .insert({
+        storage_path: path,
+        original_filename: f.displayName,
+        mime_type: f.mime,
+        size_bytes: f.size,
+        upload_session_id: params.uploadSessionId,
+        status: "temporary",
+      })
+      .select("id")
+      .single();
+
+    if (dbErr || !inserted) {
+      // Orphan guard: drop the object we just wrote.
+      await supabase.storage
+        .from(BUCKET)
+        .remove([path])
+        .catch(() => undefined);
+      throw new Error(`DB insert failed: ${dbErr?.message ?? "unknown"}`);
+    }
+
+    let previewUrl: string | null = null;
+    const { data: signed } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(path, PREVIEW_URL_TTL_SECONDS);
+    previewUrl = signed?.signedUrl ?? null;
+
+    stored.push({
+      id: inserted.id,
+      filename: f.displayName,
+      size: f.size,
+      mime: f.mime,
+      previewUrl,
+    });
+  }
+  return stored;
+}
+
+/** How many live (temporary or confirmed) files a session already holds. */
+export async function countSessionFiles(
+  supabase: SupabaseClient<any, any>,
+  uploadSessionId: string,
+): Promise<number> {
+  const { count } = await supabase
+    .from("uploaded_files")
+    .select("id", { count: "exact", head: true })
+    .eq("upload_session_id", uploadSessionId)
+    .in("status", ["temporary", "confirmed", "deleting"]);
+  return count ?? 0;
+}
+
+/**
+ * Idempotent removal of a single temporary file owned by the given session.
+ * Returns true when the file is gone (already deleted counts as success).
+ */
+export async function deleteTemporaryFile(
+  supabase: SupabaseClient<any, any>,
+  params: { uploadSessionId: string; fileId: string },
+): Promise<boolean> {
+  const { data: row, error } = await supabase
+    .from("uploaded_files")
+    .select("id, storage_path, status")
+    .eq("id", params.fileId)
+    .eq("upload_session_id", params.uploadSessionId)
+    .maybeSingle();
+
+  if (error) throw new Error(`Lookup failed: ${error.message}`);
+  if (!row) return true; // unknown id or foreign session: nothing to expose
+  if (row.status === "deleted") return true;
+  if (row.status === "confirmed") return false; // already attached to a request
+
+  const { error: rmErr } = await supabase.storage.from(BUCKET).remove([row.storage_path]);
+  if (rmErr) {
+    await supabase
+      .from("uploaded_files")
+      .update({ status: "delete_failed" })
+      .eq("id", row.id)
+      .then(
+        () => undefined,
+        () => undefined,
+      );
+    throw new Error(`Storage delete failed: ${rmErr.message}`);
+  }
+
+  await supabase
+    .from("uploaded_files")
+    .update({ status: "deleted", deleted_at: new Date().toISOString() })
+    .eq("id", row.id);
+  return true;
+}
+
+/** Best-effort cleanup of every temporary file of a session (form abandoned). */
+export async function abandonUploadSession(
+  supabase: SupabaseClient<any, any>,
+  uploadSessionId: string,
+): Promise<number> {
+  const { data: rows } = await supabase
+    .from("uploaded_files")
+    .select("id")
+    .eq("upload_session_id", uploadSessionId)
+    .eq("status", "temporary");
+  if (!rows || rows.length === 0) return 0;
+
+  let removed = 0;
+  for (const r of rows) {
+    try {
+      if (await deleteTemporaryFile(supabase, { uploadSessionId, fileId: r.id })) removed += 1;
+    } catch (err) {
+      console.error("abandonUploadSession: delete failed", err);
+    }
+  }
+  return removed;
+}
+
+/**
+ * Attach the session's temporary files to a persisted request: copy each object
+ * to its final path, verify the copy, drop the temporary object, then flip the
+ * row to 'confirmed'. A failed copy leaves the row temporary (the purge will
+ * reclaim it) and never blocks the submission.
+ */
+export async function confirmSessionFiles(
+  supabase: SupabaseClient<any, any>,
+  params: { uploadSessionId: string; entityType: EntityType; entityId: string },
+): Promise<Array<{ storage_path: string; original_filename: string; mime_type: string; size_bytes: number }>> {
+  const { data: rows, error } = await supabase
+    .from("uploaded_files")
+    .select("id, storage_path, original_filename, mime_type, size_bytes")
+    .eq("upload_session_id", params.uploadSessionId)
+    .eq("status", "temporary")
+    .is("entity_id", null);
+
+  if (error) {
+    console.error("confirmSessionFiles: lookup failed", error);
+    return [];
+  }
+  if (!rows || rows.length === 0) return [];
+
+  const confirmed: Array<{
     storage_path: string;
     original_filename: string;
     mime_type: string;
     size_bytes: number;
   }> = [];
-  try {
-    for (const f of params.files) {
-      const path = `${params.requestType}/${params.requestId}/${randomUuid()}.${f.ext}`;
-      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, f.bytes, {
-        contentType: f.mime,
-        upsert: false,
-      });
-      if (upErr) throw new Error(`Storage upload failed: ${upErr.message}`);
-      uploaded.push(path);
-      const { data: inserted, error: dbErr } = await supabase
-        .from("request_attachments")
-        .insert({
-          request_id: params.requestId,
-          request_type: params.requestType,
-          storage_path: path,
-          original_filename: f.displayName,
-          mime_type: f.mime,
-          size_bytes: f.size,
-        })
-        .select("id")
-        .single();
-      if (dbErr || !inserted) throw new Error(`DB insert failed: ${dbErr?.message}`);
-      insertedIds.push(inserted.id);
-      rows.push({
-        id: inserted.id,
-        storage_path: path,
-        original_filename: f.displayName,
-        mime_type: f.mime,
-        size_bytes: f.size,
-      });
-    }
-    return rows;
-  } catch (err) {
-    // Rollback: remove any objects and rows we already wrote.
-    if (uploaded.length > 0) {
-      await supabase.storage
+
+  for (const row of rows) {
+    const ext = row.storage_path.split(".").pop() || "bin";
+    const finalPath = `${ENTITY_PREFIX[params.entityType]}/${params.entityId}/${row.id}.${ext}`;
+    try {
+      const { error: copyErr } = await supabase.storage
         .from(BUCKET)
-        .remove(uploaded)
-        .catch(() => undefined);
+        .copy(row.storage_path, finalPath);
+      if (copyErr) throw new Error(copyErr.message);
+
+      // Verify the copy really landed before we touch anything else.
+      const { error: verifyErr } = await supabase.storage
+        .from(BUCKET)
+        .createSignedUrl(finalPath, 60);
+      if (verifyErr) throw new Error(`copy verification failed: ${verifyErr.message}`);
+
+      // Residual temporary object is not fatal — the purge sweeps it later.
+      const { error: rmErr } = await supabase.storage.from(BUCKET).remove([row.storage_path]);
+      if (rmErr) console.error("confirmSessionFiles: temp removal failed", rmErr);
+
+      const { error: updErr } = await supabase
+        .from("uploaded_files")
+        .update({
+          storage_path: finalPath,
+          status: "confirmed",
+          entity_type: params.entityType,
+          entity_id: params.entityId,
+          confirmed_at: new Date().toISOString(),
+        })
+        .eq("id", row.id)
+        .eq("status", "temporary");
+      if (updErr) throw new Error(updErr.message);
+
+      const legacyType = LEGACY_REQUEST_TYPE[params.entityType];
+      if (legacyType) {
+        await supabase
+          .from("request_attachments")
+          .insert({
+            request_id: params.entityId,
+            request_type: legacyType,
+            storage_path: finalPath,
+            original_filename: row.original_filename,
+            mime_type: row.mime_type ?? "application/octet-stream",
+            size_bytes: row.size_bytes ?? 0,
+          })
+          .then(
+            () => undefined,
+            () => undefined,
+          );
+      }
+
+      confirmed.push({
+        storage_path: finalPath,
+        original_filename: row.original_filename,
+        mime_type: row.mime_type ?? "application/octet-stream",
+        size_bytes: Number(row.size_bytes ?? 0),
+      });
+    } catch (err) {
+      console.error("confirmSessionFiles: file confirmation failed", err);
+      // Leave the row temporary so the scheduled purge can reclaim it.
     }
-    if (insertedIds.length > 0) {
-      await supabase
-        .from("request_attachments")
-        .delete()
-        .in("id", insertedIds)
-        .then(
-          () => undefined,
-          () => undefined,
-        );
-    }
-    throw err;
   }
+
+  return confirmed;
 }
 
-export async function deleteStagedAttachments(
+export interface PurgeResult {
+  scanned: number;
+  deleted: number;
+  failed: number;
+}
+
+/**
+ * Reclaim temporary files older than the retention window. Concurrency-safe:
+ * the conditional temporary -> deleting transition claims each row exactly once.
+ */
+export async function purgeExpiredTemporaryFiles(
   supabase: SupabaseClient<any, any>,
-  params: {
-    requestType: "quote" | "appointment";
-    uploadToken: string;
-  },
-): Promise<number> {
-  /*
-   * On ne recherche que les fichiers encore associés au token temporaire.
-   * Après envoi du formulaire, request_id est remplacé par l'identifiant
-   * définitif de la demande : cette route ne pourra donc plus les supprimer.
-   */
-  const { data: rows, error: selectError } = await supabase
-    .from("request_attachments")
+  options?: { retentionHours?: number; limit?: number },
+): Promise<PurgeResult> {
+  const retentionHours = options?.retentionHours ?? TEMP_RETENTION_HOURS;
+  const limit = Math.min(Math.max(options?.limit ?? 100, 1), 200);
+  const cutoff = new Date(Date.now() - retentionHours * 60 * 60 * 1000).toISOString();
+
+  const { data: candidates, error } = await supabase
+    .from("uploaded_files")
     .select("id, storage_path")
-    .eq("request_id", params.uploadToken)
-    .eq("request_type", params.requestType)
-    .like(
-      "storage_path",
-      `${params.requestType}/${params.uploadToken}/%`,
-    );
+    .eq("status", "temporary")
+    .lt("created_at", cutoff)
+    .order("created_at", { ascending: true })
+    .limit(limit);
 
-  if (selectError) {
-    throw new Error(
-      `Impossible de rechercher les pièces jointes : ${selectError.message}`,
-    );
+  if (error) throw new Error(`Purge lookup failed: ${error.message}`);
+  if (!candidates || candidates.length === 0) return { scanned: 0, deleted: 0, failed: 0 };
+
+  let deleted = 0;
+  let failed = 0;
+
+  for (const row of candidates) {
+    // Claim the row; a concurrent run gets 0 rows back and skips it.
+    const { data: claimed } = await supabase
+      .from("uploaded_files")
+      .update({ status: "deleting" })
+      .eq("id", row.id)
+      .eq("status", "temporary")
+      .select("id")
+      .maybeSingle();
+    if (!claimed) continue;
+
+    const { error: rmErr } = await supabase.storage.from(BUCKET).remove([row.storage_path]);
+    if (rmErr) {
+      failed += 1;
+      console.error("purgeExpiredTemporaryFiles: storage delete failed", row.storage_path, rmErr);
+      await supabase.from("uploaded_files").update({ status: "delete_failed" }).eq("id", row.id);
+      continue;
+    }
+    await supabase
+      .from("uploaded_files")
+      .update({ status: "deleted", deleted_at: new Date().toISOString() })
+      .eq("id", row.id);
+    deleted += 1;
   }
 
-  if (!rows || rows.length === 0) {
-    // Suppression idempotente : le lot est peut-être déjà supprimé.
-    return 0;
-  }
-
-  const storagePaths = rows.map((row) => row.storage_path);
-  const rowIds = rows.map((row) => row.id);
-
-  /*
-   * On supprime d'abord les vrais objets du Storage.
-   * On ne supprime les lignes SQL que si cette opération réussit.
-   */
-  const { error: storageError } = await supabase.storage
-    .from(BUCKET)
-    .remove(storagePaths);
-
-  if (storageError) {
-    throw new Error(
-      `Impossible de supprimer les fichiers : ${storageError.message}`,
-    );
-  }
-
-  const { error: databaseError } = await supabase
-    .from("request_attachments")
-    .delete()
-    .in("id", rowIds);
-
-  if (databaseError) {
-    throw new Error(
-      `Impossible de supprimer les pièces jointes : ${databaseError.message}`,
-    );
-  }
-
-  return rows.length;
+  return { scanned: candidates.length, deleted, failed };
 }
 
 /** Build signed URLs (7 days) for the artisan notification email. */

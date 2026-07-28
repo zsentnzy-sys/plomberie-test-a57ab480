@@ -57,7 +57,7 @@ function DevisPage() {
   // États pour nos menus déroulants sur-mesure
   const [isServiceOpen, setIsServiceOpen] = useState(false);
   const [isUrgencyOpen, setIsUrgencyOpen] = useState(false);
-  const uploadToken = useMemo(
+  const uploadSessionId = useMemo(
     () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : ""),
     [],
   );
@@ -81,7 +81,7 @@ function DevisPage() {
         data: {
           ...values,
           client_ipv4: await getIpv4(),
-          upload_token: photoCount > 0 ? uploadToken : "",
+          upload_session_id: photoCount > 0 ? uploadSessionId : "",
         },
       });
       setDone(true);
@@ -309,7 +309,7 @@ function DevisPage() {
                   <Field label="Photos du problème ou de l'installation" optional>
                     <PhotoUploader
                       requestType="quote"
-                      uploadToken={uploadToken}
+                      uploadSessionId={uploadSessionId}
                       onStatusChange={(s) => {
                         setPhotosUploading(s.uploading);
                         setPhotoCount(s.uploaded ? s.count : 0);

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const ipv4 = z.string().trim().max(45).optional().or(z.literal(""));
-const uploadToken = z
+const uploadSessionId = z
   .string()
   .trim()
   .regex(/^[0-9a-f-]{36}$/i, "Jeton invalide")
@@ -26,7 +26,7 @@ export const quoteSchema = z.object({
   description: z.string().trim().min(10, "Décrivez vos travaux (10 caractères min.)").max(2000),
   urgency: z.string().trim().max(60).optional().or(z.literal("")),
   client_ipv4: ipv4,
-  upload_token: uploadToken,
+  upload_session_id: uploadSessionId,
 });
 
 export const appointmentSchema = z.object({
@@ -38,7 +38,7 @@ export const appointmentSchema = z.object({
   time_slot: z.string().trim().min(1, "Choisissez un créneau").max(60),
   notes: z.string().trim().max(2000).optional().or(z.literal("")),
   client_ipv4: ipv4,
-  upload_token: uploadToken,
+  upload_session_id: uploadSessionId,
 });
 
 export type ContactInput = z.infer<typeof contactSchema>;

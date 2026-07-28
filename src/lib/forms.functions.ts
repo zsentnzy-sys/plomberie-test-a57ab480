@@ -2,30 +2,29 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequestIP, getRequestHeader } from "@tanstack/react-start/server";
 import { contactSchema, quoteSchema, appointmentSchema } from "./forms.schemas";
 
-async function associateAndBuildLinks(params: {
-  uploadToken: string;
-  requestType: "quote" | "appointment";
+/**
+ * Attach the session's temporary photos to the persisted request and build the
+ * signed links used by the artisan notification. Never throws: a failed
+ * attachment must not turn a saved request into a visible error.
+ */
+async function confirmAndBuildLinks(params: {
+  uploadSessionId: string;
+  entityType: "quote_request" | "appointment";
   requestId: string;
 }): Promise<Array<{ url: string; filename: string; size: number; mime: string }>> {
-  if (!params.uploadToken) return [];
+  if (!params.uploadSessionId) return [];
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { buildSignedLinks } = await import("@/lib/attachments.server");
-    // Re-tag staged rows: request_id was set to the token during upload.
-    const { data: updated, error: updErr } = await supabaseAdmin
-      .from("request_attachments")
-      .update({ request_id: params.requestId })
-      .eq("request_id", params.uploadToken)
-      .eq("request_type", params.requestType)
-      .select("storage_path, original_filename, mime_type, size_bytes");
-    if (updErr) {
-      console.error("Failed to associate attachments", updErr);
-      return [];
-    }
-    if (!updated || updated.length === 0) return [];
-    return await buildSignedLinks(supabaseAdmin, updated);
+    const { confirmSessionFiles, buildSignedLinks } = await import("@/lib/attachments.server");
+    const confirmed = await confirmSessionFiles(supabaseAdmin, {
+      uploadSessionId: params.uploadSessionId,
+      entityType: params.entityType,
+      entityId: params.requestId,
+    });
+    if (confirmed.length === 0) return [];
+    return await buildSignedLinks(supabaseAdmin, confirmed);
   } catch (err) {
-    console.error("associateAndBuildLinks crashed", err);
+    console.error("confirmAndBuildLinks crashed", err);
     return [];
   }
 }
@@ -168,9 +167,9 @@ export const submitQuote = createServerFn({ method: "POST" })
     const { enqueueTransactionalEmail, OWNER_EMAIL, PUBLIC_REPLY_TO_MAIL } = await import("@/lib/email/dispatch.server");
     const key = inserted?.id ?? data.email;
     const attachments = inserted?.id
-      ? await associateAndBuildLinks({
-          uploadToken: (data.upload_token || "").trim(),
-          requestType: "quote",
+      ? await confirmAndBuildLinks({
+          uploadSessionId: (data.upload_session_id || "").trim(),
+          entityType: "quote_request",
           requestId: inserted.id,
         })
       : [];
@@ -228,9 +227,9 @@ export const submitAppointment = createServerFn({ method: "POST" })
     const { enqueueTransactionalEmail, OWNER_EMAIL, PUBLIC_REPLY_TO_MAIL } = await import("@/lib/email/dispatch.server");
     const key = inserted?.id ?? data.email;
     const attachments = inserted?.id
-      ? await associateAndBuildLinks({
-          uploadToken: (data.upload_token || "").trim(),
-          requestType: "appointment",
+      ? await confirmAndBuildLinks({
+          uploadSessionId: (data.upload_session_id || "").trim(),
+          entityType: "appointment",
           requestId: inserted.id,
         })
       : [];

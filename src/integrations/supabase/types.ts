@@ -626,6 +626,54 @@ export type Database = {
         }
         Relationships: []
       }
+      uploaded_files: {
+        Row: {
+          confirmed_at: string | null
+          created_at: string
+          deleted_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          mime_type: string | null
+          original_filename: string
+          owner_user_id: string | null
+          size_bytes: number | null
+          status: string
+          storage_path: string
+          upload_session_id: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          mime_type?: string | null
+          original_filename: string
+          owner_user_id?: string | null
+          size_bytes?: number | null
+          status?: string
+          storage_path: string
+          upload_session_id: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          mime_type?: string | null
+          original_filename?: string
+          owner_user_id?: string | null
+          size_bytes?: number | null
+          status?: string
+          storage_path?: string
+          upload_session_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
