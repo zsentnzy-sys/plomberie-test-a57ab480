@@ -1,11 +1,18 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { getRequestIP } from '@tanstack/react-start/server'
 
-// Public multipart upload endpoint for request photos.
-// Files are stored in a private bucket; the URL never yields the object back.
-// Client generates a random `upload_token` (UUID) and later passes it to
-// submitQuote/submitAppointment so the server can associate the staged files
-// with the newly-created request.
+const UUID_RE = /^[0-9a-f-]{36}$/i
+const MAX_FILES_PER_SESSION = 2
+
+function badRequest(message: string, status = 400) {
+  return Response.json({ error: message }, { status })
+}
+
+/**
+ * Public endpoint handling the temporary lifecycle of request photos.
+ * Files land in a private bucket under temporary/<uploadSessionId>/ and are
+ * only attached to a request once the form submission confirms them.
+ */
 export const Route = createFileRoute('/api/attachments/upload')({
   server: {
     handlers: {
@@ -13,33 +20,31 @@ export const Route = createFileRoute('/api/attachments/upload')({
         try {
           const contentLength = Number(request.headers.get('content-length') || '0')
           if (contentLength > 12 * 1024 * 1024) {
-            return Response.json({ error: 'Payload trop volumineux.' }, { status: 413 })
+            return badRequest('Payload trop volumineux.', 413)
           }
           const ct = request.headers.get('content-type') || ''
           if (!ct.toLowerCase().includes('multipart/form-data')) {
-            return Response.json({ error: 'Content-Type invalide.' }, { status: 400 })
+            return badRequest('Content-Type invalide.')
           }
 
           const form = await request.formData()
-          const rawToken = form.get('upload_token')
-          const rawType = form.get('request_type')
+          const rawSession = form.get('upload_session_id')
           const files = form.getAll('files').filter((f): f is File => f instanceof File)
-          const token = typeof rawToken === 'string' ? rawToken.trim() : ''
-          const requestType = rawType === 'quote' || rawType === 'appointment' ? rawType : null
+          const sessionId = typeof rawSession === 'string' ? rawSession.trim() : ''
 
-          if (!/^[0-9a-f-]{36}$/i.test(token)) {
-            return Response.json({ error: 'Jeton d\u2019upload invalide.' }, { status: 400 })
-          }
-          if (!requestType) {
-            return Response.json({ error: 'Type de demande invalide.' }, { status: 400 })
+          if (!UUID_RE.test(sessionId)) {
+            return badRequest('Session d\u2019envoi invalide.')
           }
           if (files.length === 0) {
-            return Response.json({ error: 'Aucun fichier fourni.' }, { status: 400 })
+            return badRequest('Aucun fichier fourni.')
           }
 
-          const { validateFiles, storeAttachments, AttachmentValidationError } = await import(
-            '@/lib/attachments.server'
-          )
+          const {
+            validateFiles,
+            storeTemporaryFiles,
+            countSessionFiles,
+            AttachmentValidationError,
+          } = await import('@/lib/attachments.server')
           const { supabaseAdmin } = await import('@/integrations/supabase/client.server')
 
           // Rate limit by IP (reuses form_rate_limit)
@@ -57,13 +62,15 @@ export const Route = createFileRoute('/api/attachments/upload')({
               .eq('ip_address', ip)
               .eq('form_type', 'attachment')
               .gte('created_at', tenMinAgo)
-            if ((count ?? 0) >= 5) {
-              return Response.json(
-                { error: 'Trop d\u2019uploads. R\u00e9essayez plus tard.' },
-                { status: 429 },
-              )
+            if ((count ?? 0) >= 10) {
+              return badRequest('Trop d\u2019envois. R\u00e9essayez plus tard.', 429)
             }
             await supabaseAdmin.from('form_rate_limit').insert({ ip_address: ip, form_type: 'attachment' })
+          }
+
+          const existing = await countSessionFiles(supabaseAdmin, sessionId)
+          if (existing + files.length > MAX_FILES_PER_SESSION) {
+            return badRequest(`Vous pouvez joindre ${MAX_FILES_PER_SESSION} photos maximum.`)
           }
 
           let validated
@@ -71,67 +78,57 @@ export const Route = createFileRoute('/api/attachments/upload')({
             validated = await validateFiles(files)
           } catch (err) {
             if (err instanceof AttachmentValidationError) {
-              return Response.json({ error: err.message }, { status: 400 })
+              return badRequest(err.message)
             }
             throw err
           }
 
-          // Store under staging/<token>/... — we use the token as the "request_id"
-          // slot until the submit call associates it with a real request.
-          await storeAttachments(supabaseAdmin, {
-            requestType,
-            requestId: token,
+          const stored = await storeTemporaryFiles(supabaseAdmin, {
+            uploadSessionId: sessionId,
             files: validated,
           })
-          return Response.json({ ok: true, count: validated.length })
+          return Response.json({ ok: true, files: stored })
         } catch (err) {
           console.error('attachment upload failed', err)
-          return Response.json({ error: 'L\u2019envoi des photos a \u00e9chou\u00e9.' }, { status: 500 })
+          return badRequest('L\u2019envoi des photos a \u00e9chou\u00e9.', 500)
         }
       },
+
       DELETE: async ({ request }) => {
         try {
           const body = (await request.json().catch(() => null)) as {
-            upload_token?: unknown;
-            request_type?: unknown;
+            upload_session_id?: unknown
+            file_id?: unknown
           } | null
 
-          const token = 
-            typeof body?.upload_token === "string"
-              ? body.upload_token.trim()
-              : "";
-          
-          const requestType =
-            body?.request_type === "quote" ||
-            body?.request_type === "appointment"
-              ? body.request_type
-              : null;
+          const sessionId =
+            typeof body?.upload_session_id === 'string' ? body.upload_session_id.trim() : ''
+          const fileId = typeof body?.file_id === 'string' ? body.file_id.trim() : ''
 
-          if (!/^[0-9a-f-]{36}$/i.test(token)) {
-            return Response.json(
-              { error: "Jeton d\u2019upload invalide." },
-              { status: 400 }
-            );
+          if (!UUID_RE.test(sessionId)) {
+            return badRequest('Session d\u2019envoi invalide.')
           }
-          if (!requestType) {
-            return Response.json(
-              { error: "Type de demande invalide." },
-              { status: 400 },
-            );
+
+          const { deleteTemporaryFile, abandonUploadSession } = await import(
+            '@/lib/attachments.server'
+          )
+          const { supabaseAdmin } = await import('@/integrations/supabase/client.server')
+
+          if (fileId) {
+            if (!UUID_RE.test(fileId)) return badRequest('Fichier invalide.')
+            const ok = await deleteTemporaryFile(supabaseAdmin, {
+              uploadSessionId: sessionId,
+              fileId,
+            })
+            if (!ok) return badRequest('Ce fichier ne peut plus \u00eatre supprim\u00e9.', 409)
+            return Response.json({ ok: true, deleted: 1 })
           }
-          const {deleteStagedAttachments} = await import('@/lib/attachments.server');
-          const { supabaseAdmin } = await import('@/integrations/supabase/client.server');
-          const deleted = await deleteStagedAttachments(supabaseAdmin, {
-            uploadToken: token,
-            requestType,
-          });
-          return Response.json({
-            ok: true,
-            deleted,
-          });
+
+          const deleted = await abandonUploadSession(supabaseAdmin, sessionId)
+          return Response.json({ ok: true, deleted })
         } catch (error) {
-          console.error('attachment deletion failed', error);
-          return Response.json({ error: 'La suppression des photos a échoué.' }, { status: 500 });
+          console.error('attachment deletion failed', error)
+          return badRequest('La suppression des photos a \u00e9chou\u00e9.', 500)
         }
       },
     },
