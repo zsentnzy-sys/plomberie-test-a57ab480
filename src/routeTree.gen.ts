@@ -9,42 +9,83 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
+import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as ServicesRouteImport } from './routes/services'
+import { Route as RendezVousRouteImport } from './routes/rendez-vous'
+import { Route as PolitiqueDeConfidentialiteRouteImport } from './routes/politique-de-confidentialite'
+import { Route as MentionsLegalesRouteImport } from './routes/mentions-legales'
+import { Route as DevisRouteImport } from './routes/devis'
+import { Route as ContactRouteImport } from './routes/contact'
+import { Route as AvisRouteImport } from './routes/avis'
 import { Route as AProposRouteImport } from './routes/a-propos'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
-import { Route as AvisRouteImport } from './routes/avis'
-import { Route as ContactRouteImport } from './routes/contact'
-import { Route as DevisRouteImport } from './routes/devis'
-import { Route as MentionsLegalesRouteImport } from './routes/mentions-legales'
-import { Route as PolitiqueDeConfidentialiteRouteImport } from './routes/politique-de-confidentialite'
-import { Route as RendezVousRouteImport } from './routes/rendez-vous'
-import { Route as ServicesRouteImport } from './routes/services'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
-import { Route as AdminIndexRouteImport } from './routes/admin/index'
-import { Route as AdminDevisRouteImport } from './routes/admin/devis'
-import { Route as AdminFacturesRouteImport } from './routes/admin/factures'
-import { Route as AdminLoginRouteImport } from './routes/admin/login'
-import { Route as AdminMessagesRouteImport } from './routes/admin/messages'
-import { Route as AdminParametresRouteImport } from './routes/admin/parametres'
-import { Route as AdminRendezVousRouteImport } from './routes/admin/rendez-vous'
-import { Route as AdminResetPasswordRouteImport } from './routes/admin/reset-password'
-import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as ServicesIndexRouteImport } from './routes/services.index'
-import { Route as ServicesChauffageRouteImport } from './routes/services.chauffage'
-import { Route as ServicesDebouchageRouteImport } from './routes/services.debouchage'
-import { Route as ServicesDepannageRouteImport } from './routes/services.depannage'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as ServicesSanitaireRouteImport } from './routes/services.sanitaire'
-import { Route as AdminDevisIdRouteImport } from './routes/admin/devis_.$id'
-import { Route as ApiAttachmentsUploadRouteImport } from './routes/api/attachments/upload'
+import { Route as ServicesDepannageRouteImport } from './routes/services.depannage'
+import { Route as ServicesDebouchageRouteImport } from './routes/services.debouchage'
+import { Route as ServicesChauffageRouteImport } from './routes/services.chauffage'
+import { Route as EmailUnsubscribeRouteImport } from './routes/email/unsubscribe'
+import { Route as AdminResetPasswordRouteImport } from './routes/admin/reset-password'
+import { Route as AdminRendezVousRouteImport } from './routes/admin/rendez-vous'
+import { Route as AdminParametresRouteImport } from './routes/admin/parametres'
+import { Route as AdminMessagesRouteImport } from './routes/admin/messages'
+import { Route as AdminLoginRouteImport } from './routes/admin/login'
+import { Route as AdminFacturesRouteImport } from './routes/admin/factures'
+import { Route as AdminDevisRouteImport } from './routes/admin/devis'
 import { Route as LovableEmailSuppressionRouteImport } from './routes/lovable/email/suppression'
-import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
-import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
+import { Route as ApiAttachmentsUploadRouteImport } from './routes/api/attachments/upload'
+import { Route as AdminDevisIdRouteImport } from './routes/admin/devis_.$id'
 import { Route as LovableEmailTransactionalSendRouteImport } from './routes/lovable/email/transactional/send'
+import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
+import { Route as LovableEmailQueueProcessRouteImport } from './routes/lovable/email/queue/process'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const UnsubscribeRoute = UnsubscribeRouteImport.update({
+  id: '/unsubscribe',
+  path: '/unsubscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServicesRoute = ServicesRouteImport.update({
+  id: '/services',
+  path: '/services',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RendezVousRoute = RendezVousRouteImport.update({
+  id: '/rendez-vous',
+  path: '/rendez-vous',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PolitiqueDeConfidentialiteRoute =
+  PolitiqueDeConfidentialiteRouteImport.update({
+    id: '/politique-de-confidentialite',
+    path: '/politique-de-confidentialite',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const MentionsLegalesRoute = MentionsLegalesRouteImport.update({
+  id: '/mentions-legales',
+  path: '/mentions-legales',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevisRoute = DevisRouteImport.update({
+  id: '/devis',
+  path: '/devis',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AvisRoute = AvisRouteImport.update({
+  id: '/avis',
+  path: '/avis',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AProposRoute = AProposRouteImport.update({
@@ -57,95 +98,9 @@ const AdminRouteRoute = AdminRouteRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AvisRoute = AvisRouteImport.update({
-  id: '/avis',
-  path: '/avis',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ContactRoute = ContactRouteImport.update({
-  id: '/contact',
-  path: '/contact',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DevisRoute = DevisRouteImport.update({
-  id: '/devis',
-  path: '/devis',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MentionsLegalesRoute = MentionsLegalesRouteImport.update({
-  id: '/mentions-legales',
-  path: '/mentions-legales',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PolitiqueDeConfidentialiteRoute =
-  PolitiqueDeConfidentialiteRouteImport.update({
-    id: '/politique-de-confidentialite',
-    path: '/politique-de-confidentialite',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const RendezVousRoute = RendezVousRouteImport.update({
-  id: '/rendez-vous',
-  path: '/rendez-vous',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ServicesRoute = ServicesRouteImport.update({
-  id: '/services',
-  path: '/services',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const UnsubscribeRoute = UnsubscribeRouteImport.update({
-  id: '/unsubscribe',
-  path: '/unsubscribe',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminIndexRoute = AdminIndexRouteImport.update({
+const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AdminRouteRoute,
-} as any)
-const AdminDevisRoute = AdminDevisRouteImport.update({
-  id: '/devis',
-  path: '/devis',
-  getParentRoute: () => AdminRouteRoute,
-} as any)
-const AdminFacturesRoute = AdminFacturesRouteImport.update({
-  id: '/factures',
-  path: '/factures',
-  getParentRoute: () => AdminRouteRoute,
-} as any)
-const AdminLoginRoute = AdminLoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => AdminRouteRoute,
-} as any)
-const AdminMessagesRoute = AdminMessagesRouteImport.update({
-  id: '/messages',
-  path: '/messages',
-  getParentRoute: () => AdminRouteRoute,
-} as any)
-const AdminParametresRoute = AdminParametresRouteImport.update({
-  id: '/parametres',
-  path: '/parametres',
-  getParentRoute: () => AdminRouteRoute,
-} as any)
-const AdminRendezVousRoute = AdminRendezVousRouteImport.update({
-  id: '/rendez-vous',
-  path: '/rendez-vous',
-  getParentRoute: () => AdminRouteRoute,
-} as any)
-const AdminResetPasswordRoute = AdminResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
-  getParentRoute: () => AdminRouteRoute,
-} as any)
-const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
-  id: '/email/unsubscribe',
-  path: '/email/unsubscribe',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ServicesIndexRoute = ServicesIndexRouteImport.update({
@@ -153,14 +108,14 @@ const ServicesIndexRoute = ServicesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ServicesRoute,
 } as any)
-const ServicesChauffageRoute = ServicesChauffageRouteImport.update({
-  id: '/chauffage',
-  path: '/chauffage',
-  getParentRoute: () => ServicesRoute,
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRouteRoute,
 } as any)
-const ServicesDebouchageRoute = ServicesDebouchageRouteImport.update({
-  id: '/debouchage',
-  path: '/debouchage',
+const ServicesSanitaireRoute = ServicesSanitaireRouteImport.update({
+  id: '/sanitaire',
+  path: '/sanitaire',
   getParentRoute: () => ServicesRoute,
 } as any)
 const ServicesDepannageRoute = ServicesDepannageRouteImport.update({
@@ -168,30 +123,75 @@ const ServicesDepannageRoute = ServicesDepannageRouteImport.update({
   path: '/depannage',
   getParentRoute: () => ServicesRoute,
 } as any)
-const ServicesSanitaireRoute = ServicesSanitaireRouteImport.update({
-  id: '/sanitaire',
-  path: '/sanitaire',
+const ServicesDebouchageRoute = ServicesDebouchageRouteImport.update({
+  id: '/debouchage',
+  path: '/debouchage',
   getParentRoute: () => ServicesRoute,
 } as any)
-const AdminDevisIdRoute = AdminDevisIdRouteImport.update({
-  id: '/devis_/$id',
-  path: '/devis/$id',
+const ServicesChauffageRoute = ServicesChauffageRouteImport.update({
+  id: '/chauffage',
+  path: '/chauffage',
+  getParentRoute: () => ServicesRoute,
+} as any)
+const EmailUnsubscribeRoute = EmailUnsubscribeRouteImport.update({
+  id: '/email/unsubscribe',
+  path: '/email/unsubscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminResetPasswordRoute = AdminResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => AdminRouteRoute,
 } as any)
-const ApiAttachmentsUploadRoute = ApiAttachmentsUploadRouteImport.update({
-  id: '/api/attachments/upload',
-  path: '/api/attachments/upload',
-  getParentRoute: () => rootRouteImport,
+const AdminRendezVousRoute = AdminRendezVousRouteImport.update({
+  id: '/rendez-vous',
+  path: '/rendez-vous',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminParametresRoute = AdminParametresRouteImport.update({
+  id: '/parametres',
+  path: '/parametres',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminMessagesRoute = AdminMessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminLoginRoute = AdminLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminFacturesRoute = AdminFacturesRouteImport.update({
+  id: '/factures',
+  path: '/factures',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminDevisRoute = AdminDevisRouteImport.update({
+  id: '/devis',
+  path: '/devis',
+  getParentRoute: () => AdminRouteRoute,
 } as any)
 const LovableEmailSuppressionRoute = LovableEmailSuppressionRouteImport.update({
   id: '/lovable/email/suppression',
   path: '/lovable/email/suppression',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LovableEmailQueueProcessRoute =
-  LovableEmailQueueProcessRouteImport.update({
-    id: '/lovable/email/queue/process',
-    path: '/lovable/email/queue/process',
+const ApiAttachmentsUploadRoute = ApiAttachmentsUploadRouteImport.update({
+  id: '/api/attachments/upload',
+  path: '/api/attachments/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminDevisIdRoute = AdminDevisIdRouteImport.update({
+  id: '/devis_/$id',
+  path: '/devis/$id',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const LovableEmailTransactionalSendRoute =
+  LovableEmailTransactionalSendRouteImport.update({
+    id: '/lovable/email/transactional/send',
+    path: '/lovable/email/transactional/send',
     getParentRoute: () => rootRouteImport,
   } as any)
 const LovableEmailTransactionalPreviewRoute =
@@ -200,10 +200,10 @@ const LovableEmailTransactionalPreviewRoute =
     path: '/lovable/email/transactional/preview',
     getParentRoute: () => rootRouteImport,
   } as any)
-const LovableEmailTransactionalSendRoute =
-  LovableEmailTransactionalSendRouteImport.update({
-    id: '/lovable/email/transactional/send',
-    path: '/lovable/email/transactional/send',
+const LovableEmailQueueProcessRoute =
+  LovableEmailQueueProcessRouteImport.update({
+    id: '/lovable/email/queue/process',
+    path: '/lovable/email/queue/process',
     getParentRoute: () => rootRouteImport,
   } as any)
 
@@ -434,11 +434,67 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/unsubscribe': {
+      id: '/unsubscribe'
+      path: '/unsubscribe'
+      fullPath: '/unsubscribe'
+      preLoaderRoute: typeof UnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/services': {
+      id: '/services'
+      path: '/services'
+      fullPath: '/services'
+      preLoaderRoute: typeof ServicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rendez-vous': {
+      id: '/rendez-vous'
+      path: '/rendez-vous'
+      fullPath: '/rendez-vous'
+      preLoaderRoute: typeof RendezVousRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/politique-de-confidentialite': {
+      id: '/politique-de-confidentialite'
+      path: '/politique-de-confidentialite'
+      fullPath: '/politique-de-confidentialite'
+      preLoaderRoute: typeof PolitiqueDeConfidentialiteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mentions-legales': {
+      id: '/mentions-legales'
+      path: '/mentions-legales'
+      fullPath: '/mentions-legales'
+      preLoaderRoute: typeof MentionsLegalesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/devis': {
+      id: '/devis'
+      path: '/devis'
+      fullPath: '/devis'
+      preLoaderRoute: typeof DevisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/avis': {
+      id: '/avis'
+      path: '/avis'
+      fullPath: '/avis'
+      preLoaderRoute: typeof AvisRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/a-propos': {
@@ -455,130 +511,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/avis': {
-      id: '/avis'
-      path: '/avis'
-      fullPath: '/avis'
-      preLoaderRoute: typeof AvisRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/contact': {
-      id: '/contact'
-      path: '/contact'
-      fullPath: '/contact'
-      preLoaderRoute: typeof ContactRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/devis': {
-      id: '/devis'
-      path: '/devis'
-      fullPath: '/devis'
-      preLoaderRoute: typeof DevisRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/mentions-legales': {
-      id: '/mentions-legales'
-      path: '/mentions-legales'
-      fullPath: '/mentions-legales'
-      preLoaderRoute: typeof MentionsLegalesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/politique-de-confidentialite': {
-      id: '/politique-de-confidentialite'
-      path: '/politique-de-confidentialite'
-      fullPath: '/politique-de-confidentialite'
-      preLoaderRoute: typeof PolitiqueDeConfidentialiteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/rendez-vous': {
-      id: '/rendez-vous'
-      path: '/rendez-vous'
-      fullPath: '/rendez-vous'
-      preLoaderRoute: typeof RendezVousRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/services': {
-      id: '/services'
-      path: '/services'
-      fullPath: '/services'
-      preLoaderRoute: typeof ServicesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/unsubscribe': {
-      id: '/unsubscribe'
-      path: '/unsubscribe'
-      fullPath: '/unsubscribe'
-      preLoaderRoute: typeof UnsubscribeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin/': {
-      id: '/admin/'
+    '/': {
+      id: '/'
       path: '/'
-      fullPath: '/admin/'
-      preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof AdminRouteRoute
-    }
-    '/admin/devis': {
-      id: '/admin/devis'
-      path: '/devis'
-      fullPath: '/admin/devis'
-      preLoaderRoute: typeof AdminDevisRouteImport
-      parentRoute: typeof AdminRouteRoute
-    }
-    '/admin/factures': {
-      id: '/admin/factures'
-      path: '/factures'
-      fullPath: '/admin/factures'
-      preLoaderRoute: typeof AdminFacturesRouteImport
-      parentRoute: typeof AdminRouteRoute
-    }
-    '/admin/login': {
-      id: '/admin/login'
-      path: '/login'
-      fullPath: '/admin/login'
-      preLoaderRoute: typeof AdminLoginRouteImport
-      parentRoute: typeof AdminRouteRoute
-    }
-    '/admin/messages': {
-      id: '/admin/messages'
-      path: '/messages'
-      fullPath: '/admin/messages'
-      preLoaderRoute: typeof AdminMessagesRouteImport
-      parentRoute: typeof AdminRouteRoute
-    }
-    '/admin/parametres': {
-      id: '/admin/parametres'
-      path: '/parametres'
-      fullPath: '/admin/parametres'
-      preLoaderRoute: typeof AdminParametresRouteImport
-      parentRoute: typeof AdminRouteRoute
-    }
-    '/admin/rendez-vous': {
-      id: '/admin/rendez-vous'
-      path: '/rendez-vous'
-      fullPath: '/admin/rendez-vous'
-      preLoaderRoute: typeof AdminRendezVousRouteImport
-      parentRoute: typeof AdminRouteRoute
-    }
-    '/admin/reset-password': {
-      id: '/admin/reset-password'
-      path: '/reset-password'
-      fullPath: '/admin/reset-password'
-      preLoaderRoute: typeof AdminResetPasswordRouteImport
-      parentRoute: typeof AdminRouteRoute
-    }
-    '/email/unsubscribe': {
-      id: '/email/unsubscribe'
-      path: '/email/unsubscribe'
-      fullPath: '/email/unsubscribe'
-      preLoaderRoute: typeof EmailUnsubscribeRouteImport
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/services/': {
@@ -588,18 +525,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServicesIndexRouteImport
       parentRoute: typeof ServicesRoute
     }
-    '/services/chauffage': {
-      id: '/services/chauffage'
-      path: '/chauffage'
-      fullPath: '/services/chauffage'
-      preLoaderRoute: typeof ServicesChauffageRouteImport
-      parentRoute: typeof ServicesRoute
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRouteRoute
     }
-    '/services/debouchage': {
-      id: '/services/debouchage'
-      path: '/debouchage'
-      fullPath: '/services/debouchage'
-      preLoaderRoute: typeof ServicesDebouchageRouteImport
+    '/services/sanitaire': {
+      id: '/services/sanitaire'
+      path: '/sanitaire'
+      fullPath: '/services/sanitaire'
+      preLoaderRoute: typeof ServicesSanitaireRouteImport
       parentRoute: typeof ServicesRoute
     }
     '/services/depannage': {
@@ -609,26 +546,75 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServicesDepannageRouteImport
       parentRoute: typeof ServicesRoute
     }
-    '/services/sanitaire': {
-      id: '/services/sanitaire'
-      path: '/sanitaire'
-      fullPath: '/services/sanitaire'
-      preLoaderRoute: typeof ServicesSanitaireRouteImport
+    '/services/debouchage': {
+      id: '/services/debouchage'
+      path: '/debouchage'
+      fullPath: '/services/debouchage'
+      preLoaderRoute: typeof ServicesDebouchageRouteImport
       parentRoute: typeof ServicesRoute
     }
-    '/admin/devis_/$id': {
-      id: '/admin/devis_/$id'
-      path: '/devis/$id'
-      fullPath: '/admin/devis/$id'
-      preLoaderRoute: typeof AdminDevisIdRouteImport
+    '/services/chauffage': {
+      id: '/services/chauffage'
+      path: '/chauffage'
+      fullPath: '/services/chauffage'
+      preLoaderRoute: typeof ServicesChauffageRouteImport
+      parentRoute: typeof ServicesRoute
+    }
+    '/email/unsubscribe': {
+      id: '/email/unsubscribe'
+      path: '/email/unsubscribe'
+      fullPath: '/email/unsubscribe'
+      preLoaderRoute: typeof EmailUnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/reset-password': {
+      id: '/admin/reset-password'
+      path: '/reset-password'
+      fullPath: '/admin/reset-password'
+      preLoaderRoute: typeof AdminResetPasswordRouteImport
       parentRoute: typeof AdminRouteRoute
     }
-    '/api/attachments/upload': {
-      id: '/api/attachments/upload'
-      path: '/api/attachments/upload'
-      fullPath: '/api/attachments/upload'
-      preLoaderRoute: typeof ApiAttachmentsUploadRouteImport
-      parentRoute: typeof rootRouteImport
+    '/admin/rendez-vous': {
+      id: '/admin/rendez-vous'
+      path: '/rendez-vous'
+      fullPath: '/admin/rendez-vous'
+      preLoaderRoute: typeof AdminRendezVousRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/parametres': {
+      id: '/admin/parametres'
+      path: '/parametres'
+      fullPath: '/admin/parametres'
+      preLoaderRoute: typeof AdminParametresRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/messages': {
+      id: '/admin/messages'
+      path: '/messages'
+      fullPath: '/admin/messages'
+      preLoaderRoute: typeof AdminMessagesRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/login': {
+      id: '/admin/login'
+      path: '/login'
+      fullPath: '/admin/login'
+      preLoaderRoute: typeof AdminLoginRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/factures': {
+      id: '/admin/factures'
+      path: '/factures'
+      fullPath: '/admin/factures'
+      preLoaderRoute: typeof AdminFacturesRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/devis': {
+      id: '/admin/devis'
+      path: '/devis'
+      fullPath: '/admin/devis'
+      preLoaderRoute: typeof AdminDevisRouteImport
+      parentRoute: typeof AdminRouteRoute
     }
     '/lovable/email/suppression': {
       id: '/lovable/email/suppression'
@@ -637,11 +623,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailSuppressionRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/lovable/email/queue/process': {
-      id: '/lovable/email/queue/process'
-      path: '/lovable/email/queue/process'
-      fullPath: '/lovable/email/queue/process'
-      preLoaderRoute: typeof LovableEmailQueueProcessRouteImport
+    '/api/attachments/upload': {
+      id: '/api/attachments/upload'
+      path: '/api/attachments/upload'
+      fullPath: '/api/attachments/upload'
+      preLoaderRoute: typeof ApiAttachmentsUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/devis_/$id': {
+      id: '/admin/devis_/$id'
+      path: '/devis/$id'
+      fullPath: '/admin/devis/$id'
+      preLoaderRoute: typeof AdminDevisIdRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/lovable/email/transactional/send': {
+      id: '/lovable/email/transactional/send'
+      path: '/lovable/email/transactional/send'
+      fullPath: '/lovable/email/transactional/send'
+      preLoaderRoute: typeof LovableEmailTransactionalSendRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lovable/email/transactional/preview': {
@@ -651,11 +651,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LovableEmailTransactionalPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/lovable/email/transactional/send': {
-      id: '/lovable/email/transactional/send'
-      path: '/lovable/email/transactional/send'
-      fullPath: '/lovable/email/transactional/send'
-      preLoaderRoute: typeof LovableEmailTransactionalSendRouteImport
+    '/lovable/email/queue/process': {
+      id: '/lovable/email/queue/process'
+      path: '/lovable/email/queue/process'
+      fullPath: '/lovable/email/queue/process'
+      preLoaderRoute: typeof LovableEmailQueueProcessRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -732,3 +732,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
