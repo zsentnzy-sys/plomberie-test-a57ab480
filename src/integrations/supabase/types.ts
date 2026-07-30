@@ -294,6 +294,7 @@ export type Database = {
           payment_method: string
           pdf_storage_path: string | null
           sent_at: string | null
+          source_quote_id: string | null
           status: Database["public"]["Enums"]["invoice_status"]
           total_ht: number
           total_ttc: number
@@ -322,6 +323,7 @@ export type Database = {
           payment_method: string
           pdf_storage_path?: string | null
           sent_at?: string | null
+          source_quote_id?: string | null
           status?: Database["public"]["Enums"]["invoice_status"]
           total_ht: number
           total_ttc: number
@@ -350,13 +352,22 @@ export type Database = {
           payment_method?: string
           pdf_storage_path?: string | null
           sent_at?: string | null
+          source_quote_id?: string | null
           status?: Database["public"]["Enums"]["invoice_status"]
           total_ht?: number
           total_ttc?: number
           total_tva?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "invoices_source_quote_id_fkey"
+            columns: ["source_quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quote_counter: {
         Row: {
@@ -746,6 +757,7 @@ export type Database = {
           _invoice_date: string
           _lines: Json
           _payment_method: string
+          _source_quote_id?: string
         }
         Returns: {
           invoice_id: string

@@ -35,6 +35,7 @@ const invoiceSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide (YYYY-MM-DD)"),
   lines: z.array(lineSchema).min(1, "Ajoutez au moins une ligne").max(50),
   idempotency_key: z.string().uuid("Clé d'idempotence invalide"),
+  source_quote_id: z.string().uuid().optional(),
 });
 
 const BUCKET = "request-attachments";
@@ -69,6 +70,7 @@ export const generateInvoice = createServerFn({ method: "POST" })
         _invoice_date: data.invoice_date,
         _artisan_snapshot: artisanSnapshot as unknown as Json,
         _lines: data.lines.map((l, i) => ({ ...l, position: i + 1 })) as unknown as Json,
+        _source_quote_id: (data.source_quote_id ?? null) as unknown as string,
       },
     );
     if (rpcErr || !rpcRows || rpcRows.length === 0) {

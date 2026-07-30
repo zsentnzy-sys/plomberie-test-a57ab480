@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.create_invoice_with_lines_for_idempotency(text, text, text, text, text, text, date, jsonb, jsonb);
