@@ -64,7 +64,8 @@ export const listDocuments = createServerFn({ method: "POST" })
         )
         .order("created_at", { ascending: false })
         .range(from, to);
-      if (data.status && data.status !== "all") q = q.eq("status", data.status);
+      if (data.status && data.status !== "all")
+        q = q.eq("status", data.status as never);
       if (search)
         q = q.or(
           `client_name.ilike.%${search}%,client_email.ilike.%${search}%,invoice_number.ilike.%${search}%`,
@@ -101,7 +102,8 @@ export const listDocuments = createServerFn({ method: "POST" })
       )
       .order("created_at", { ascending: false })
       .range(from, to);
-    if (data.status && data.status !== "all") q = q.eq("status", data.status);
+    if (data.status && data.status !== "all")
+      q = q.eq("status", data.status as never);
     if (search)
       q = q.or(
         `client_name.ilike.%${search}%,client_email.ilike.%${search}%,quote_number.ilike.%${search}%`,
