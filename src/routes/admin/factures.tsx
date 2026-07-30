@@ -200,6 +200,7 @@ function FacturesPage() {
         setLines([newLine()]);
         setIdempotencyKey(crypto.randomUUID());
         setLastInvoiceId(null);
+        setSourceQuote(null);
       } else {
         const failed: string[] = [];
         if (!clientOk)
@@ -237,6 +238,21 @@ function FacturesPage() {
           contenu de facture n'est conservé côté serveur.
         </p>
       </div>
+
+      {prefilling && (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Chargement du devis…
+        </p>
+      )}
+
+      {sourceQuote && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="pt-6 text-sm">
+            Facture créée à partir du devis <strong>{sourceQuote.number}</strong>.
+            Le devis d'origine reste inchangé.
+          </CardContent>
+        </Card>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card>
