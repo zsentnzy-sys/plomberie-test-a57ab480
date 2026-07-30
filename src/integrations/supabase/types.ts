@@ -294,6 +294,7 @@ export type Database = {
           payment_method: string
           pdf_storage_path: string | null
           sent_at: string | null
+          source_quote_id: string | null
           status: Database["public"]["Enums"]["invoice_status"]
           total_ht: number
           total_ttc: number
@@ -322,6 +323,7 @@ export type Database = {
           payment_method: string
           pdf_storage_path?: string | null
           sent_at?: string | null
+          source_quote_id?: string | null
           status?: Database["public"]["Enums"]["invoice_status"]
           total_ht: number
           total_ttc: number
@@ -350,13 +352,22 @@ export type Database = {
           payment_method?: string
           pdf_storage_path?: string | null
           sent_at?: string | null
+          source_quote_id?: string | null
           status?: Database["public"]["Enums"]["invoice_status"]
           total_ht?: number
           total_ttc?: number
           total_tva?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "invoices_source_quote_id_fkey"
+            columns: ["source_quote_id"]
+            isOneToOne: false
+            referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quote_counter: {
         Row: {
@@ -735,27 +746,50 @@ export type Database = {
           reused: boolean
         }[]
       }
-      create_invoice_with_lines_for_idempotency: {
-        Args: {
-          _artisan_snapshot: Json
-          _client_address: string
-          _client_email: string
-          _client_name: string
-          _client_phone: string
-          _idempotency_key: string
-          _invoice_date: string
-          _lines: Json
-          _payment_method: string
-        }
-        Returns: {
-          invoice_id: string
-          invoice_number: string
-          reused: boolean
-          total_ht: number
-          total_ttc: number
-          total_tva: number
-        }[]
-      }
+      create_invoice_with_lines_for_idempotency:
+        | {
+            Args: {
+              _artisan_snapshot: Json
+              _client_address: string
+              _client_email: string
+              _client_name: string
+              _client_phone: string
+              _idempotency_key: string
+              _invoice_date: string
+              _lines: Json
+              _payment_method: string
+            }
+            Returns: {
+              invoice_id: string
+              invoice_number: string
+              reused: boolean
+              total_ht: number
+              total_ttc: number
+              total_tva: number
+            }[]
+          }
+        | {
+            Args: {
+              _artisan_snapshot: Json
+              _client_address: string
+              _client_email: string
+              _client_name: string
+              _client_phone: string
+              _idempotency_key: string
+              _invoice_date: string
+              _lines: Json
+              _payment_method: string
+              _source_quote_id?: string
+            }
+            Returns: {
+              invoice_id: string
+              invoice_number: string
+              reused: boolean
+              total_ht: number
+              total_ttc: number
+              total_tva: number
+            }[]
+          }
       create_quote_for_idempotency: {
         Args: {
           _artisan_snapshot: Json
