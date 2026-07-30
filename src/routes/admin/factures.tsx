@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileDown, Send, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { generateInvoice, resendInvoiceEmail } from "@/lib/invoices.functions";
+import { getQuoteForInvoice } from "@/lib/history.functions";
 import {
   LineItemsEditor,
   TotalsCard,
@@ -30,10 +31,15 @@ import {
 type Payment = "Carte bancaire" | "Virement bancaire" | "Chèque" | "Espèces";
 
 export const Route = createFileRoute("/admin/factures")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    depuisDevis:
+      typeof search.depuisDevis === "string" ? search.depuisDevis : undefined,
+  }),
   component: FacturesPage,
 });
 
 function FacturesPage() {
+  const { depuisDevis } = Route.useSearch();
   const [clientName, setClientName] = useState("");
   const [clientAddress, setClientAddress] = useState("");
   const [clientEmail, setClientEmail] = useState("");
@@ -54,6 +60,54 @@ function FacturesPage() {
   const submit = useServerFn(generateInvoice);
   const resend = useServerFn(resendInvoiceEmail);
   const [resending, setResending] = useState(false);
+  const loadQuote = useServerFn(getQuoteForInvoice);
+  const [sourceQuote, setSourceQuote] = useState<{
+    id: string;
+    number: string;
+  } | null>(null);
+  const [prefilling, setPrefilling] = useState(Boolean(depuisDevis));
+  const prefilledFor = useRef<string | null>(null);
+
+  // Quote → invoice conversion: prefill the existing form, nothing else changes.
+  useEffect(() => {
+    if (!depuisDevis || prefilledFor.current === depuisDevis) return;
+    prefilledFor.current = depuisDevis;
+    let cancelled = false;
+    setPrefilling(true);
+    loadQuote({ data: { quoteId: depuisDevis } })
+      .then((q) => {
+        if (cancelled) return;
+        setSourceQuote({ id: q.quoteId, number: q.quoteNumber });
+        setClientName(q.clientName);
+        setClientAddress(q.clientAddress);
+        setClientEmail(q.clientEmail);
+        setClientPhone(q.clientPhone);
+        setLines(
+          q.lines.length
+            ? q.lines.map((l) => ({
+                id: crypto.randomUUID(),
+                type: l.type,
+                description: l.description,
+                unit_price_ht: String(l.unit_price_ht).replace(".", ","),
+                quantity: String(l.quantity).replace(".", ","),
+                tva: l.tva,
+              }))
+            : [newLine()],
+        );
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        toast.error(
+          err instanceof Error ? err.message : "Devis introuvable.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setPrefilling(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [depuisDevis, loadQuote]);
 
   async function handleResend() {
     if (!lastInvoiceId || resending) return;
@@ -127,6 +181,7 @@ function FacturesPage() {
           invoice_date: invoiceDate,
           lines: parsedLines,
           idempotency_key: idempotencyKey,
+          source_quote_id: sourceQuote?.id,
         },
       });
       setLastInvoiceId(res.invoiceId);
