@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileDown, Send, Loader2 } from "lucide-react";
+import { FileDown, Send, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { generateInvoice, resendInvoiceEmail } from "@/lib/invoices.functions";
@@ -29,6 +29,40 @@ import {
 } from "@/components/ui/select";
 
 type Payment = "Carte bancaire" | "Virement bancaire" | "Chèque" | "Espèces";
+type CustomerType = "individual" | "company" | "public_sector";
+
+/** Lightweight collapsible section, styled like the existing cards. */
+function OptionalSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Card>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 p-6 text-left"
+      >
+        <span>
+          <span className="block text-base font-semibold leading-none">{title}</span>
+          <span className="mt-1 block text-sm text-muted-foreground">{description}</span>
+        </span>
+        {open ? (
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
+      </button>
+      {open && <CardContent className="grid gap-4 pt-0 md:grid-cols-2">{children}</CardContent>}
+    </Card>
+  );
+}
 
 export const Route = createFileRoute("/admin/factures")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -49,6 +83,23 @@ function FacturesPage() {
     new Date().toISOString().slice(0, 10),
   );
   const [lines, setLines] = useState<EditableLine[]>([newLine()]);
+  // Factur-X regulatory block — optional, defaults cover a B2C invoice.
+  const [customerType, setCustomerType] = useState<CustomerType>("individual");
+  const [countryCode, setCountryCode] = useState("FR");
+  const [siren, setSiren] = useState("");
+  const [siret, setSiret] = useState("");
+  const [vatNumber, setVatNumber] = useState("");
+  const [operationCategory, setOperationCategory] = useState<
+    "goods" | "services" | "mixed"
+  >("services");
+  const [vatOnDebits, setVatOnDebits] = useState(true);
+  const [deliveryAddress, setDeliveryAddress] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [orderReference, setOrderReference] = useState("");
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [idempotencyKey, setIdempotencyKey] = useState<string>(() =>
     crypto.randomUUID(),
@@ -182,6 +233,20 @@ function FacturesPage() {
           lines: parsedLines,
           idempotency_key: idempotencyKey,
           source_quote_id: sourceQuote?.id,
+          customer_type: customerType,
+          customer_siren: siren.trim(),
+          customer_siret: siret.trim(),
+          customer_vat_number: vatNumber.trim(),
+          customer_country_code: countryCode.trim().toUpperCase() || "FR",
+          operation_category: operationCategory,
+          vat_on_debits: vatOnDebits,
+          delivery_address: deliveryAddress.trim(),
+          delivery_date: deliveryDate,
+          payment_due_date: dueDate,
+          payment_reference: paymentReference.trim(),
+          purchase_order_reference: orderReference.trim(),
+          service_period_start: periodStart,
+          service_period_end: periodEnd,
         },
       });
       setLastInvoiceId(res.invoiceId);
@@ -234,8 +299,8 @@ function FacturesPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Générer une facture</h1>
         <p className="text-sm text-muted-foreground">
-          Le PDF est envoyé au client et à l'artisan puis téléchargé. Aucun
-          contenu de facture n'est conservé côté serveur.
+          Facture Factur-X (PDF/A-3 avec XML EN 16931 intégré) : le document est
+          envoyé au client et à l'artisan puis téléchargé.
         </p>
       </div>
 
@@ -338,6 +403,185 @@ function FacturesPage() {
           lines={lines}
           onChange={setLines}
         />
+
+        <OptionalSection
+          title="Informations réglementaires"
+          description="Requises pour une facture professionnelle (Factur-X / EN 16931)."
+        >
+          <div className="space-y-2">
+            <Label>Type de client</Label>
+            <Select
+              value={customerType}
+              onValueChange={(v) => setCustomerType(v as CustomerType)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="individual">Particulier</SelectItem>
+                <SelectItem value="company">Entreprise</SelectItem>
+                <SelectItem value="public_sector">Secteur public</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="country">Pays du client (ISO)</Label>
+            <Input
+              id="country"
+              value={countryCode}
+              onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
+              maxLength={2}
+            />
+          </div>
+          {customerType !== "individual" && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="siren">SIREN {countryCode === "FR" ? "*" : ""}</Label>
+                <Input
+                  id="siren"
+                  value={siren}
+                  onChange={(e) => setSiren(e.target.value)}
+                  maxLength={9}
+                  inputMode="numeric"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="siret">SIRET</Label>
+                <Input
+                  id="siret"
+                  value={siret}
+                  onChange={(e) => setSiret(e.target.value)}
+                  maxLength={14}
+                  inputMode="numeric"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="tvaintra">N° TVA intracommunautaire</Label>
+                <Input
+                  id="tvaintra"
+                  value={vatNumber}
+                  onChange={(e) => setVatNumber(e.target.value.toUpperCase())}
+                  maxLength={20}
+                />
+              </div>
+            </>
+          )}
+          <div className="space-y-2">
+            <Label>Nature de l'opération</Label>
+            <Select
+              value={operationCategory}
+              onValueChange={(v) =>
+                setOperationCategory(v as "goods" | "services" | "mixed")
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="services">Prestations de services</SelectItem>
+                <SelectItem value="goods">Livraisons de biens</SelectItem>
+                <SelectItem value="mixed">Mixte</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>TVA sur les débits</Label>
+            <Select
+              value={vatOnDebits ? "oui" : "non"}
+              onValueChange={(v) => setVatOnDebits(v === "oui")}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="oui">Oui</SelectItem>
+                <SelectItem value="non">Non</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </OptionalSection>
+
+        <OptionalSection
+          title="Livraison"
+          description="Adresse et date de livraison si différentes de la facturation."
+        >
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="daddr">Adresse de livraison</Label>
+            <Textarea
+              id="daddr"
+              value={deliveryAddress}
+              onChange={(e) => setDeliveryAddress(e.target.value)}
+              rows={2}
+              maxLength={400}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ddate">Date de livraison</Label>
+            <Input
+              id="ddate"
+              type="date"
+              value={deliveryDate}
+              onChange={(e) => setDeliveryDate(e.target.value)}
+            />
+          </div>
+        </OptionalSection>
+
+        <OptionalSection
+          title="Paiement et références"
+          description="Échéance, référence de paiement et bon de commande client."
+        >
+          <div className="space-y-2">
+            <Label htmlFor="due">Date d'échéance</Label>
+            <Input
+              id="due"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pref">Référence de paiement</Label>
+            <Input
+              id="pref"
+              value={paymentReference}
+              onChange={(e) => setPaymentReference(e.target.value)}
+              maxLength={60}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="oref">Référence de commande client</Label>
+            <Input
+              id="oref"
+              value={orderReference}
+              onChange={(e) => setOrderReference(e.target.value)}
+              maxLength={60}
+            />
+          </div>
+        </OptionalSection>
+
+        <OptionalSection
+          title="Période de prestation"
+          description="Période couverte par les travaux facturés."
+        >
+          <div className="space-y-2">
+            <Label htmlFor="pstart">Début</Label>
+            <Input
+              id="pstart"
+              type="date"
+              value={periodStart}
+              onChange={(e) => setPeriodStart(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pend">Fin</Label>
+            <Input
+              id="pend"
+              type="date"
+              value={periodEnd}
+              onChange={(e) => setPeriodEnd(e.target.value)}
+            />
+          </div>
+        </OptionalSection>
 
         <TotalsCard totals={totals} />
 
