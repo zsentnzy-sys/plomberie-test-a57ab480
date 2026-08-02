@@ -25,14 +25,6 @@ const isoDate = z
   .optional()
   .or(z.literal(""));
 
-const _unusedLineSchema = z.object({
-  type: z.enum(["Service", "Matériel", "Taux horaire"]),
-  description: z.string().trim().min(1, "Description requise").max(300),
-  unit_price_ht: z.number().min(0).max(1_000_000),
-  quantity: z.number().min(0.01).max(10_000),
-  tva: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]),
-});
-
 const invoiceSchema = z.object({
   client_name: z.string().trim().min(2, "Nom requis").max(120),
   client_address: z.string().trim().min(4, "Adresse requise").max(400),
