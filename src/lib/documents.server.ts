@@ -2,7 +2,8 @@
 // Both PDFs are produced by the same renderer so they share identity, header,
 // table, totals and footer layout. Only labels/meta/legal differ — no business
 // or legal sentence is hardcoded here (see document-config.server.ts).
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
+import { PDFDocument, rgb, type PDFFont, type PDFPage } from "@cantoo/pdf-lib";
+import { embedPdfaFonts } from "./facturx/facturx-pdfa.server";
 import type { ArtisanInfo } from "./artisan.server";
 
 export type { ArtisanInfo };
@@ -484,8 +485,9 @@ export async function renderDocumentPdf(
   params: RenderDocumentParams,
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  // Fully embedded fonts: mandatory for PDF/A-3 and metrically compatible with
+  // the previous Helvetica rendering, so the layout is unchanged.
+  const { font, bold } = await embedPdfaFonts(doc);
   const page = doc.addPage([PAGE_W, PAGE_H]);
   const { width, height } = page.getSize();
 

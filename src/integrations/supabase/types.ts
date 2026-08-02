@@ -222,6 +222,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string
+          discount_amount: number
           id: string
           invoice_id: string
           line_total_ht: number
@@ -231,11 +232,14 @@ export type Database = {
           quantity: number
           tva: number
           type: string
+          unit_code: string
           unit_price_ht: number
+          vat_category_code: string
         }
         Insert: {
           created_at?: string
           description: string
+          discount_amount?: number
           id?: string
           invoice_id: string
           line_total_ht: number
@@ -245,11 +249,14 @@ export type Database = {
           quantity: number
           tva: number
           type: string
+          unit_code?: string
           unit_price_ht: number
+          vat_category_code?: string
         }
         Update: {
           created_at?: string
           description?: string
+          discount_amount?: number
           id?: string
           invoice_id?: string
           line_total_ht?: number
@@ -259,7 +266,9 @@ export type Database = {
           quantity?: number
           tva?: number
           type?: string
+          unit_code?: string
           unit_price_ht?: number
+          vat_category_code?: string
         }
         Relationships: [
           {
@@ -281,25 +290,54 @@ export type Database = {
           client_phone: string | null
           created_at: string
           created_by: string
+          customer_country_code: string
+          customer_siren: string | null
+          customer_siret: string | null
+          customer_type: string
+          customer_vat_number: string | null
+          delivery_address: string | null
+          delivery_date: string | null
+          e_invoice_error: string | null
+          e_invoice_provider: string | null
+          e_invoice_reference: string | null
+          e_invoice_status: string
+          e_invoice_submitted_at: string | null
           email_artisan_error: string | null
           email_artisan_status: string
           email_client_error: string | null
           email_client_status: string
+          facturx_profile: string | null
+          facturx_validated_at: string | null
+          facturx_validation_errors: Json | null
+          facturx_validation_status: string
+          facturx_version: string | null
           generation_error: string | null
           id: string
           idempotency_key: string
           invoice_date: string
+          invoice_format: string
           invoice_number: string
+          operation_category: string
           payload_fingerprint: string | null
+          payment_due_date: string | null
           payment_method: string
+          payment_reference: string | null
+          pdf_sha256: string | null
           pdf_storage_path: string | null
+          purchase_order_reference: string | null
           sent_at: string | null
+          service_period_end: string | null
+          service_period_start: string | null
           source_quote_id: string | null
           status: Database["public"]["Enums"]["invoice_status"]
+          structured_invoice_snapshot: Json | null
           total_ht: number
           total_ttc: number
           total_tva: number
+          transaction_classification: string | null
           updated_at: string
+          vat_on_debits: boolean
+          xml_storage_path: string | null
         }
         Insert: {
           artisan_snapshot: Json
@@ -310,25 +348,54 @@ export type Database = {
           client_phone?: string | null
           created_at?: string
           created_by: string
+          customer_country_code?: string
+          customer_siren?: string | null
+          customer_siret?: string | null
+          customer_type?: string
+          customer_vat_number?: string | null
+          delivery_address?: string | null
+          delivery_date?: string | null
+          e_invoice_error?: string | null
+          e_invoice_provider?: string | null
+          e_invoice_reference?: string | null
+          e_invoice_status?: string
+          e_invoice_submitted_at?: string | null
           email_artisan_error?: string | null
           email_artisan_status?: string
           email_client_error?: string | null
           email_client_status?: string
+          facturx_profile?: string | null
+          facturx_validated_at?: string | null
+          facturx_validation_errors?: Json | null
+          facturx_validation_status?: string
+          facturx_version?: string | null
           generation_error?: string | null
           id?: string
           idempotency_key: string
           invoice_date: string
+          invoice_format?: string
           invoice_number: string
+          operation_category?: string
           payload_fingerprint?: string | null
+          payment_due_date?: string | null
           payment_method: string
+          payment_reference?: string | null
+          pdf_sha256?: string | null
           pdf_storage_path?: string | null
+          purchase_order_reference?: string | null
           sent_at?: string | null
+          service_period_end?: string | null
+          service_period_start?: string | null
           source_quote_id?: string | null
           status?: Database["public"]["Enums"]["invoice_status"]
+          structured_invoice_snapshot?: Json | null
           total_ht: number
           total_ttc: number
           total_tva: number
+          transaction_classification?: string | null
           updated_at?: string
+          vat_on_debits?: boolean
+          xml_storage_path?: string | null
         }
         Update: {
           artisan_snapshot?: Json
@@ -339,25 +406,54 @@ export type Database = {
           client_phone?: string | null
           created_at?: string
           created_by?: string
+          customer_country_code?: string
+          customer_siren?: string | null
+          customer_siret?: string | null
+          customer_type?: string
+          customer_vat_number?: string | null
+          delivery_address?: string | null
+          delivery_date?: string | null
+          e_invoice_error?: string | null
+          e_invoice_provider?: string | null
+          e_invoice_reference?: string | null
+          e_invoice_status?: string
+          e_invoice_submitted_at?: string | null
           email_artisan_error?: string | null
           email_artisan_status?: string
           email_client_error?: string | null
           email_client_status?: string
+          facturx_profile?: string | null
+          facturx_validated_at?: string | null
+          facturx_validation_errors?: Json | null
+          facturx_validation_status?: string
+          facturx_version?: string | null
           generation_error?: string | null
           id?: string
           idempotency_key?: string
           invoice_date?: string
+          invoice_format?: string
           invoice_number?: string
+          operation_category?: string
           payload_fingerprint?: string | null
+          payment_due_date?: string | null
           payment_method?: string
+          payment_reference?: string | null
+          pdf_sha256?: string | null
           pdf_storage_path?: string | null
+          purchase_order_reference?: string | null
           sent_at?: string | null
+          service_period_end?: string | null
+          service_period_start?: string | null
           source_quote_id?: string | null
           status?: Database["public"]["Enums"]["invoice_status"]
+          structured_invoice_snapshot?: Json | null
           total_ht?: number
           total_ttc?: number
           total_tva?: number
+          transaction_classification?: string | null
           updated_at?: string
+          vat_on_debits?: boolean
+          xml_storage_path?: string | null
         }
         Relationships: [
           {
@@ -744,6 +840,29 @@ export type Database = {
           invoice_id: string
           invoice_number: string
           reused: boolean
+        }[]
+      }
+      create_invoice_with_lines_facturx: {
+        Args: {
+          _artisan_snapshot: Json
+          _client_address: string
+          _client_email: string
+          _client_name: string
+          _client_phone: string
+          _idempotency_key: string
+          _invoice_date: string
+          _lines: Json
+          _payment_method: string
+          _regulatory?: Json
+          _source_quote_id?: string
+        }
+        Returns: {
+          invoice_id: string
+          invoice_number: string
+          reused: boolean
+          total_ht: number
+          total_ttc: number
+          total_tva: number
         }[]
       }
       create_invoice_with_lines_for_idempotency: {
