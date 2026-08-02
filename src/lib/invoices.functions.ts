@@ -82,9 +82,38 @@ export const generateInvoice = createServerFn({ method: "POST" })
 
     const artisanSnapshot = buildArtisanSnapshot();
 
+    // Regulatory consistency is decided server-side, never by the client.
+    const { assertRegulatoryConsistency } = await import(
+      "@/lib/facturx/classification.server"
+    );
+    assertRegulatoryConsistency({
+      customerType: data.customer_type,
+      customerCountryCode: data.customer_country_code.toUpperCase(),
+      customerSiren: data.customer_siren || null,
+      customerSiret: data.customer_siret || null,
+      customerVatNumber: data.customer_vat_number || null,
+    });
+
+    const regulatory = {
+      customer_type: data.customer_type,
+      customer_siren: data.customer_siren || "",
+      customer_siret: data.customer_siret || "",
+      customer_vat_number: data.customer_vat_number || "",
+      customer_country_code: data.customer_country_code.toUpperCase(),
+      operation_category: data.operation_category,
+      vat_on_debits: data.vat_on_debits,
+      delivery_address: data.delivery_address || "",
+      delivery_date: data.delivery_date || "",
+      payment_due_date: data.payment_due_date || "",
+      payment_reference: data.payment_reference || "",
+      purchase_order_reference: data.purchase_order_reference || "",
+      service_period_start: data.service_period_start || "",
+      service_period_end: data.service_period_end || "",
+    };
+
     // Atomic: invoice + lines are created (or reused) in a single transaction.
     const { data: rpcRows, error: rpcErr } = await context.supabase.rpc(
-      "create_invoice_with_lines_for_idempotency",
+      "create_invoice_with_lines_facturx",
       {
         _idempotency_key: data.idempotency_key,
         _client_name: data.client_name,
@@ -95,6 +124,7 @@ export const generateInvoice = createServerFn({ method: "POST" })
         _invoice_date: data.invoice_date,
         _artisan_snapshot: artisanSnapshot as unknown as Json,
         _lines: data.lines.map((l, i) => ({ ...l, position: i + 1 })) as unknown as Json,
+        _regulatory: regulatory as unknown as Json,
         _source_quote_id: (data.source_quote_id ?? null) as unknown as string,
       },
     );
