@@ -15,8 +15,11 @@ import {
 import fontkit from "@pdf-lib/fontkit";
 
 import { FACTURX_CONFIG } from "./facturx-config.server";
-import { LIBERATION_SANS_REGULAR_BASE64 } from "./assets/liberation-sans-regular";
-import { LIBERATION_SANS_BOLD_BASE64 } from "./assets/liberation-sans-bold";
+// Fonts live in .b64 data files imported raw: a multi-hundred-KB string
+// literal inside a .ts module overflows the Babel parser used by the
+// TanStack transform pipeline.
+import LIBERATION_SANS_REGULAR_BASE64 from "./assets/liberation-sans-regular.b64?raw";
+import LIBERATION_SANS_BOLD_BASE64 from "./assets/liberation-sans-bold.b64?raw";
 import { SRGB_ICC_BASE64 } from "./assets/srgb-icc";
 
 export const PDFA_FONT_NAMES = {
@@ -25,7 +28,7 @@ export const PDFA_FONT_NAMES = {
 };
 
 function base64ToBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
+  const bin = atob(b64.trim());
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
