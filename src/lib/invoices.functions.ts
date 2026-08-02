@@ -19,6 +19,20 @@ const lineSchema = z.object({
   tva: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]),
 });
 
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide (YYYY-MM-DD)")
+  .optional()
+  .or(z.literal(""));
+
+const _unusedLineSchema = z.object({
+  type: z.enum(["Service", "Matériel", "Taux horaire"]),
+  description: z.string().trim().min(1, "Description requise").max(300),
+  unit_price_ht: z.number().min(0).max(1_000_000),
+  quantity: z.number().min(0.01).max(10_000),
+  tva: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]),
+});
+
 const invoiceSchema = z.object({
   client_name: z.string().trim().min(2, "Nom requis").max(120),
   client_address: z.string().trim().min(4, "Adresse requise").max(400),
@@ -36,6 +50,25 @@ const invoiceSchema = z.object({
   lines: z.array(lineSchema).min(1, "Ajoutez au moins une ligne").max(50),
   idempotency_key: z.string().uuid("Clé d'idempotence invalide"),
   source_quote_id: z.string().uuid().optional(),
+  // --- Factur-X regulatory block (all optional for a B2C invoice) ---
+  customer_type: z.enum(["individual", "company", "public_sector"]).default("individual"),
+  customer_siren: z.string().trim().max(20).optional().or(z.literal("")),
+  customer_siret: z.string().trim().max(20).optional().or(z.literal("")),
+  customer_vat_number: z.string().trim().max(20).optional().or(z.literal("")),
+  customer_country_code: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{2}$/, "Code pays invalide")
+    .default("FR"),
+  operation_category: z.enum(["goods", "services", "mixed"]).default("services"),
+  vat_on_debits: z.boolean().default(true),
+  delivery_address: z.string().trim().max(400).optional().or(z.literal("")),
+  delivery_date: isoDate,
+  payment_due_date: isoDate,
+  payment_reference: z.string().trim().max(60).optional().or(z.literal("")),
+  purchase_order_reference: z.string().trim().max(60).optional().or(z.literal("")),
+  service_period_start: isoDate,
+  service_period_end: isoDate,
 });
 
 const BUCKET = "request-attachments";
