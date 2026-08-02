@@ -356,6 +356,35 @@ function HistoryPage() {
                       <div className="text-xs text-muted-foreground">
                         {row.kind === "invoice" ? "Facture" : "Devis"}
                       </div>
+                      {row.kind === "invoice" && (
+                        <div className="mt-1 space-y-1">
+                          <span
+                            className={
+                              row.format === "facturx"
+                                ? "inline-block rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
+                                : "inline-block rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground"
+                            }
+                          >
+                            {row.format === "facturx"
+                              ? `Factur-X ${row.facturxProfile ?? "EN 16931"}`
+                              : "PDF classique"}
+                          </span>
+                          {row.format === "facturx" &&
+                            (row.validationStatus === "valid" ? (
+                              <div className="text-[11px] text-muted-foreground">
+                                Prête pour plateforme agréée
+                              </div>
+                            ) : row.validationStatus === "invalid" ? (
+                              <div className="text-[11px] text-destructive">
+                                Non conforme : {row.validationSummary ?? "erreur de validation"}
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-muted-foreground">
+                                Validation en attente
+                              </div>
+                            ))}
+                        </div>
+                      )}
                       {row.linkedInvoiceNumber && (
                         <div className="mt-1 text-xs text-muted-foreground">
                           Facturé : {row.linkedInvoiceNumber}
