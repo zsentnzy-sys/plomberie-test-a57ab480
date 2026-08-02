@@ -19,6 +19,12 @@ const lineSchema = z.object({
   tva: z.union([z.literal(0), z.literal(5.5), z.literal(10), z.literal(20)]),
 });
 
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide (YYYY-MM-DD)")
+  .optional()
+  .or(z.literal(""));
+
 const invoiceSchema = z.object({
   client_name: z.string().trim().min(2, "Nom requis").max(120),
   client_address: z.string().trim().min(4, "Adresse requise").max(400),
@@ -36,6 +42,25 @@ const invoiceSchema = z.object({
   lines: z.array(lineSchema).min(1, "Ajoutez au moins une ligne").max(50),
   idempotency_key: z.string().uuid("Clé d'idempotence invalide"),
   source_quote_id: z.string().uuid().optional(),
+  // --- Factur-X regulatory block (all optional for a B2C invoice) ---
+  customer_type: z.enum(["individual", "company", "public_sector"]).default("individual"),
+  customer_siren: z.string().trim().max(20).optional().or(z.literal("")),
+  customer_siret: z.string().trim().max(20).optional().or(z.literal("")),
+  customer_vat_number: z.string().trim().max(20).optional().or(z.literal("")),
+  customer_country_code: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{2}$/, "Code pays invalide")
+    .default("FR"),
+  operation_category: z.enum(["goods", "services", "mixed"]).default("services"),
+  vat_on_debits: z.boolean().default(true),
+  delivery_address: z.string().trim().max(400).optional().or(z.literal("")),
+  delivery_date: isoDate,
+  payment_due_date: isoDate,
+  payment_reference: z.string().trim().max(60).optional().or(z.literal("")),
+  purchase_order_reference: z.string().trim().max(60).optional().or(z.literal("")),
+  service_period_start: isoDate,
+  service_period_end: isoDate,
 });
 
 const BUCKET = "request-attachments";
@@ -57,9 +82,38 @@ export const generateInvoice = createServerFn({ method: "POST" })
 
     const artisanSnapshot = buildArtisanSnapshot();
 
+    // Regulatory consistency is decided server-side, never by the client.
+    const { assertRegulatoryConsistency } = await import(
+      "@/lib/facturx/classification.server"
+    );
+    assertRegulatoryConsistency({
+      customerType: data.customer_type,
+      customerCountryCode: data.customer_country_code.toUpperCase(),
+      customerSiren: data.customer_siren || null,
+      customerSiret: data.customer_siret || null,
+      customerVatNumber: data.customer_vat_number || null,
+    });
+
+    const regulatory = {
+      customer_type: data.customer_type,
+      customer_siren: data.customer_siren || "",
+      customer_siret: data.customer_siret || "",
+      customer_vat_number: data.customer_vat_number || "",
+      customer_country_code: data.customer_country_code.toUpperCase(),
+      operation_category: data.operation_category,
+      vat_on_debits: data.vat_on_debits,
+      delivery_address: data.delivery_address || "",
+      delivery_date: data.delivery_date || "",
+      payment_due_date: data.payment_due_date || "",
+      payment_reference: data.payment_reference || "",
+      purchase_order_reference: data.purchase_order_reference || "",
+      service_period_start: data.service_period_start || "",
+      service_period_end: data.service_period_end || "",
+    };
+
     // Atomic: invoice + lines are created (or reused) in a single transaction.
     const { data: rpcRows, error: rpcErr } = await context.supabase.rpc(
-      "create_invoice_with_lines_for_idempotency",
+      "create_invoice_with_lines_facturx",
       {
         _idempotency_key: data.idempotency_key,
         _client_name: data.client_name,
@@ -70,6 +124,7 @@ export const generateInvoice = createServerFn({ method: "POST" })
         _invoice_date: data.invoice_date,
         _artisan_snapshot: artisanSnapshot as unknown as Json,
         _lines: data.lines.map((l, i) => ({ ...l, position: i + 1 })) as unknown as Json,
+        _regulatory: regulatory as unknown as Json,
         _source_quote_id: (data.source_quote_id ?? null) as unknown as string,
       },
     );

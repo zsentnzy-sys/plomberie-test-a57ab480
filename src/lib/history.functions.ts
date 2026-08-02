@@ -21,6 +21,11 @@ export interface HistoryRow {
   /** Quotes only: the linked request must be confirmed before invoicing. */
   convertible?: boolean;
   convertBlockedReason?: string | null;
+  /** Invoices only: 'facturx' | 'classic_pdf'. */
+  format?: string;
+  facturxProfile?: string | null;
+  validationStatus?: string | null;
+  validationSummary?: string | null;
 }
 
 export interface HistoryPage {
@@ -43,6 +48,13 @@ function escapeLike(value: string) {
   return value.replace(/[%,()]/g, " ").trim();
 }
 
+/** Human-readable, stack-free summary of the stored validation errors. */
+function summarizeValidation(errors: unknown): string | null {
+  if (!Array.isArray(errors) || errors.length === 0) return null;
+  const first = String(errors[0]);
+  return errors.length > 1 ? `${first} (+${errors.length - 1})` : first;
+}
+
 export const listDocuments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => listSchema.parse(data))
@@ -59,7 +71,7 @@ export const listDocuments = createServerFn({ method: "POST" })
       let q = context.supabase
         .from("invoices")
         .select(
-          "id, invoice_number, client_name, client_address, client_email, created_at, total_ttc, status, sent_at, pdf_storage_path",
+          "id, invoice_number, client_name, client_address, client_email, created_at, total_ttc, status, sent_at, pdf_storage_path, invoice_format, facturx_profile, facturx_validation_status, facturx_validation_errors",
           { count: "exact" },
         )
         .order("created_at", { ascending: false })
@@ -87,6 +99,10 @@ export const listDocuments = createServerFn({ method: "POST" })
           status: r.status,
           sentAt: r.sent_at,
           hasPdf: Boolean(r.pdf_storage_path),
+          format: r.invoice_format ?? "classic_pdf",
+          facturxProfile: r.facturx_profile ?? null,
+          validationStatus: r.facturx_validation_status ?? null,
+          validationSummary: summarizeValidation(r.facturx_validation_errors),
         })),
         total: count ?? 0,
         page,

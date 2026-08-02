@@ -1,52 +1,59 @@
-# Historique unifié des devis et factures
+## Audit technique (réalisé)
 
-Nouvelle page `/admin/historique` dans l'espace admin, réutilisant les tables, fonctions d'envoi et de PDF existantes. Aucun changement de design global : mêmes composants (Card, Table, Badge, Button, Select, Input) et même mise en page que les pages admin actuelles.
+Constats sur le moteur actuel (`@cantoo/pdf-lib` 2.7.4, `documents.server.ts`, `invoices.server.ts`, `invoices-pdf.server.ts`) :
 
-## 1. Base de données (migration additive)
+| Exigence PDF/A-3 / Factur-X | Possible aujourd'hui ? |
+|---|---|
+| Polices intégralement incorporées | **Non** — `StandardFonts.Helvetica` (police non incorporée) → rejet PDF/A immédiat. Corrigible : `registerFontkit` + TTF embarqué (fontkit est déjà une dépendance de la lib). |
+| Fichier XML associé + entrée `/AF` + `AFRelationship=Alternative` + MIME `application/xml` | **Oui** — `PDFDocument.attach(bytes, "factur-x.xml", { mimeType, afRelationship })` est supporté par le fork Cantoo. |
+| Nom de fichier Unicode | Oui (`UF` géré par l'embedder). |
+| Métadonnées XMP personnalisées (PDF/A + extension Factur-X) | **Pas d'API haut niveau**, mais faisable via l'API bas niveau (`doc.catalog.set(PDFName.of('Metadata'), flux XMP)`). |
+| Profil ICC + OutputIntent | **Pas d'API**, faisable en bas niveau (flux ICC sRGB embarqué + dictionnaire `OutputIntent`). |
+| Validation VeraPDF en production | **Non** — VeraPDF est un outil Java ; l'hébergement de production est un runtime Worker sans JVM ni sous-processus. |
 
-- Ajout de `source_quote_id uuid` (référence vers `quotes`, `ON DELETE SET NULL`) dans `invoices`.
-- Index unique partiel sur `invoices(source_quote_id) WHERE source_quote_id IS NOT NULL` : un devis ne peut donner qu'une seule facture → double conversion impossible au niveau base.
-- Mise à jour de la fonction transactionnelle `create_invoice_with_lines_for_idempotency` avec un paramètre optionnel `_source_quote_id` (valeur par défaut nulle, appels existants inchangés). En cas de violation d'unicité, message clair : « Ce devis a déjà été transformé en facture ».
+**Conclusion / choix technique retenu** : on garde `@cantoo/pdf-lib` comme moteur de rendu (le design actuel est ainsi préservé au pixel près) et on ajoute une **couche de post-traitement PDF/A-3 maison** (`facturx-pdfa.server.ts`) qui : incorpore les polices, injecte ICC + OutputIntent, écrit les XMP (PDF/A-3B + extension Factur-X), attache `factur-x.xml` et force `/AF`. Aucune bibliothèque Factur-X JS mature n'existe côté Worker (les solutions éprouvées — `factur-x` Python, Mustangproject Java — nécessitent un runtime absent en production ; un microservice dédié serait la seule alternative, plus lourde et non demandée à ce stade).
 
-## 2. Lecture serveur (nouveau fichier `src/lib/history.functions.ts`)
+**Limites assumées** : la conformité est garantie par des auto-contrôles structurels stricts à chaque génération + une **qualification VeraPDF hors production** (script sandbox/CI bloquant avant déploiement), conformément à votre choix. Impact déploiement : aucun service externe, poids bundle +~700 Ko (police Liberation Sans + profil ICC sRGB, embarqués en base64 pour rester bundle-safe).
 
-Toutes les fonctions sont protégées par `requireSupabaseAuth` + le garde `assertAdmin` déjà utilisé par les devis/factures.
+**Police** : Liberation Sans / Liberation Sans Bold (métriques compatibles Helvetica) → rendu inchangé.
 
-- `listDocuments` : renvoie une page de devis **ou** de factures (type demandé), avec recherche (nom, e-mail, numéro), filtre de statut, tri décroissant sur la date de création, pagination serveur (25 par page). Colonnes renvoyées : type, numéro, client, adresse, e-mail, date de création, total TTC, statut, date d'envoi, présence d'un PDF, et pour les devis le numéro de la facture liée s'il existe.
-- `getQuoteForInvoice` : renvoie les données d'un devis (client, adresse, e-mail, téléphone, lignes avec quantités, prix unitaires, TVA) pour préremplir le formulaire de facture, et signale si une facture existe déjà pour ce devis.
+## Étapes
 
-Aucun chemin Storage n'est renvoyé au client. Les fonctions existantes `getQuotePdfSignedUrl` / `getInvoicePdfSignedUrl` (URL signée 10 min) sont réutilisées telles quelles pour le bouton **Ouvrir**, et `resendQuoteEmail` / `resendInvoiceEmail` pour le bouton **Renvoyer** (logique idempotente déjà en place, aucun nouveau document créé).
+### 1. Migration additive (base)
+Sur `invoices` : `customer_type`, `customer_siren`, `customer_siret`, `customer_vat_number`, `customer_country_code`, `operation_category`, `vat_on_debits`, `delivery_*`, `payment_due_date`, `payment_reference`, `purchase_order_reference`, `service_period_start/end`, `transaction_classification`, `invoice_format` (défaut `classic_pdf`), `facturx_version`, `facturx_profile`, `facturx_validation_status`, `facturx_validation_errors`, `structured_invoice_snapshot` (jsonb), `pdf_sha256`, `facturx_validated_at`, plus les colonnes `e_invoice_*` (défaut `not_submitted`). Sur `invoice_lines` : `unit_code`, `vat_category_code`, `discount_amount`. Nouvelle RPC `create_invoice_with_lines_facturx` (l'ancienne reste en place pour la compatibilité) ; les factures existantes restent `classic_pdf`.
 
-## 3. Page `/admin/historique`
+### 2. Modèle métier unique
+`src/lib/facturx/facturx-config.server.ts` (`FACTURX_CONFIG` : 1.09 / ZUGFeRD 2.5 / EN16931 / `factur-x.xml`), `structured-invoice.types.ts` (`StructuredInvoiceData`, parties, lignes, ventilations, paiement, totaux) et `structured-invoice.server.ts` qui construit ce modèle **exclusivement depuis les lignes persistées + le snapshot artisan**. PDF et XML consomment ce seul objet.
 
-- Entrée « Historique » ajoutée à la barre latérale admin (icône `History`), même style que les autres liens.
-- Deux onglets : **Factures** / **Devis**.
-- Barre d'outils : champ de recherche (nom, e-mail, numéro), sélecteur de statut (Tous, Envoyé, Échec d'envoi, Envoi partiel, Prêt à envoyer), pagination précédent/suivant.
-- Tableau : numéro, client (nom + adresse + e-mail), date de création (JJ/MM/AAAA), total TTC, badge de statut, date d'envoi.
-- Badges : Envoyé (vert), Envoi partiel (ambre), Échec d'envoi (rouge/destructive), Prêt à envoyer (neutre), plus les autres statuts existants affichés de façon lisible.
-- États gérés : chargement (spinner cohérent avec les autres pages), liste vide (« Aucun document »), erreur affichée proprement avec bouton Réessayer.
+### 3. Arithmétique sûre
+`money.server.ts` : tous les montants en centimes entiers, politique d'arrondi unique (arrondi ligne → TVA ligne → ventilation par taux → totaux → reste à payer), plus un comparateur qui échoue si base ≠ modèle ≠ PDF ≠ XML.
 
-### Actions par ligne
+### 4. Mapping normalisé
+`codes.server.ts` : types internes → codes (Service/Taux horaire → unités `HUR`/`C62`/`MTQ`…), moyens de paiement → UNTDID 4461 (virement 30, carte 48, chèque 20, espèces 10), catégories TVA (`S`, `Z`, `E`), type de facture `380`, devise `EUR`, pays ISO 3166-1.
 
-- **Ouvrir** : appelle la fonction serveur d'URL signée puis ouvre le PDF dans un nouvel onglet. Si le document n'a pas de PDF, le bouton est désactivé avec l'info « PDF non disponible ».
-- **Renvoyer** : visible uniquement pour les statuts `ready`, `send_failed`, `partially_sent`. Réutilise les fonctions de renvoi existantes, affiche le résultat par destinataire et rafraîchit la liste.
-- **Transformer en facture** (devis uniquement) : ouvre une boîte de dialogue de confirmation, puis redirige vers le formulaire de facture prérempli. Aucun envoi ni création automatique. Si une facture liée existe déjà, l'action est remplacée par le numéro de la facture affiché dans la ligne.
+### 5. Classification réglementaire
+`classification.server.ts` : calcul serveur de `b2b_france | b2c_france | b2b_international | b2c_international | public_sector` à partir du type client, du pays et de la situation TVA, avec validation conditionnelle (SIREN exigé pour une entreprise française, jamais pour un particulier).
 
-## 4. Conversion devis → facture
+### 6. XML CII EN 16931
+`facturx-xml.server.ts` : fonctions séparées *mapping* → *sérialisation* (échappement strict, aucune concaténation brute, namespaces officiels rsm/ram/udt, UTF-8) → *validation* (XSD + règles Schematron EN 16931 et Factur-X pertinentes, listes de codes, cohérence des totaux BR-CO).
 
-- `/admin/factures` accepte un paramètre d'URL `?depuisDevis=<id>` : le formulaire existant est préchargé (client, adresse, e-mail, téléphone, lignes avec descriptions, quantités, prix unitaires, TVA) via `getQuoteForInvoice`. Le design du formulaire reste inchangé ; un simple bandeau indique « Facture créée à partir du devis DEV-XXXX-XXXX ».  
-  
-La conversion ne doit pouvoir se faire uniquement si la demande de devis (correspoquote_request id) a le status 'confirmed' afin de ne pas crée de facture pour un devis qui n'a pas été accepté.
-- L'administrateur peut tout modifier avant validation. À la validation, la facture est créée par la fonction transactionnelle habituelle avec son propre numéro `FACT-AAAA-XXXX` et `source_quote_id` renseigné.
-- Le devis d'origine n'est jamais modifié. Une seconde tentative de conversion est bloquée côté serveur.
+### 7. PDF/A-3 hybride
+`facturx-pdfa.server.ts` : polices Liberation embarquées, ICC sRGB + OutputIntent, XMP PDF/A-3B avec le schéma d'extension Factur-X (`DocumentFileName`, `DocumentType=INVOICE`, `Version=1.0`, `ConformanceLevel=EN 16931`), pièce jointe `factur-x.xml` en `Alternative`, `/AF` au catalogue, XMP dcterms/pdf. Le rendu visuel reste celui de `documents.server.ts`.
 
-## 5. Vérifications
+### 8. Flux de génération
+`invoices.functions.ts` / `invoices-pdf.server.ts` suivent l'ordre imposé : auth admin → Zod → RPC idempotente → relecture DB → `StructuredInvoiceData` → XML → validation XML → PDF/A-3 → auto-contrôles PDF (OutputIntent, polices, XMP, AF, nom du fichier) → contrôle de cohérence des montants → SHA-256 → upload bucket privé → persistance conformité + snapshot → `ready` → envoi e-mail existant. Tout échec ⇒ `generation_failed` + `facturx_validation_status = invalid`, erreur technique côté serveur et message générique côté UI. Aucune facture finalisée n'est régénérée à partir de données plus récentes.
 
-Typecheck TypeScript et build de production, puis tests sur l'application : affichage des quatre statuts, ouverture d'un PDF, renvoi après échec, envoi partiel, conversion d'un devis, tentative de double conversion, devis sans PDF, document introuvable, accès par un utilisateur non administrateur.
+### 9. Formulaire /admin/factures
+Ajout de sections repliables optionnelles (Informations réglementaires, Livraison, Paiement, Période de prestation), champs conditionnels selon `customer_type`. Le formulaire actuel et la conversion devis → facture restent inchangés visuellement.
 
-## Détails techniques
+### 10. Historique
+`/admin/historique` : badge « Factur-X EN 16931 » ou « PDF classique », statut de validation, boutons Ouvrir / Télécharger via URL signée courte, mention « Prête pour plateforme agréée » uniquement si validation réussie, résumé d'erreur lisible sans stack trace.
 
-- Fichiers créés : `src/lib/history.functions.ts`, `src/routes/admin/historique.tsx`, une migration SQL additive.
-- Fichiers modifiés : `src/routes/admin/route.tsx` (lien de navigation), `src/routes/admin/factures.tsx` (préremplissage via search param), `src/lib/invoices.functions.ts` (champ optionnel `source_quote_id` transmis à la RPC), types Supabase régénérés.
-- Recherche serveur via `ilike` sur `client_name`, `client_email` et le numéro de document ; pagination via `range()` avec `count: "exact"`.
-- Aucune duplication de logique métier : génération PDF, envoi d'e-mails et URLs signées restent dans les modules existants.
+### 11. Abstraction future plateforme
+`src/lib/einvoice/provider.types.ts` : interface `EInvoiceProvider` seule, colonnes `e_invoice_*` à `not_submitted`. Aucun fournisseur, aucun bouton.
+
+### 12. Qualification & tests
+Script `scripts/validate-facturx.ts` (sandbox/CI) : génère une facture de référence, exécute VeraPDF (PDF/A-3B) et la validation Schematron officielle, échoue en cas de non-conformité. Tests unitaires sur les arrondis, le mapping des codes, la classification et l'échappement XML. Non-régression vérifiée sur : devis (moteur intact), numérotation, idempotence, renvoi d'e-mails, pièces jointes, anciennes factures.
+
+## Hors périmètre
+Aucun fournisseur connecté, aucune transmission réglementaire, aucun changement sur les devis, les rendez-vous, les formulaires publics ni le design du dashboard.

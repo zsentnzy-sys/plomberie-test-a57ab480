@@ -22,6 +22,20 @@ export interface StoredInvoice {
   email_client_error: string | null;
   email_artisan_status: string | null;
   email_artisan_error: string | null;
+  invoice_format?: string | null;
+  customer_type?: string | null;
+  customer_siren?: string | null;
+  customer_siret?: string | null;
+  customer_vat_number?: string | null;
+  customer_country_code?: string | null;
+  vat_on_debits?: boolean | null;
+  delivery_address?: string | null;
+  delivery_date?: string | null;
+  payment_due_date?: string | null;
+  payment_reference?: string | null;
+  purchase_order_reference?: string | null;
+  service_period_start?: string | null;
+  service_period_end?: string | null;
 }
 
 export async function loadInvoice(invoiceId: string): Promise<StoredInvoice> {
@@ -29,12 +43,19 @@ export async function loadInvoice(invoiceId: string): Promise<StoredInvoice> {
   const { data, error } = await supabaseAdmin
     .from("invoices")
     .select(
-      "id, invoice_number, invoice_date, payment_method, client_name, client_address, client_email, client_phone, total_ht, total_tva, total_ttc, artisan_snapshot, pdf_storage_path, status, email_client_status, email_client_error, email_artisan_status, email_artisan_error",
+      "id, invoice_number, invoice_date, payment_method, client_name, client_address, client_email, client_phone, total_ht, total_tva, total_ttc, artisan_snapshot, pdf_storage_path, status, email_client_status, email_client_error, email_artisan_status, email_artisan_error, invoice_format, customer_type, customer_siren, customer_siret, customer_vat_number, customer_country_code, vat_on_debits, delivery_address, delivery_date, payment_due_date, payment_reference, purchase_order_reference, service_period_start, service_period_end",
     )
     .eq("id", invoiceId)
     .single();
   if (error || !data) throw new Error("Facture introuvable.");
   return data as unknown as StoredInvoice;
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", bytes as unknown as ArrayBuffer);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 /** Download the stored PDF, regenerating it from persisted rows if needed. */
@@ -53,7 +74,9 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
 
   const { data: persisted, error: linesErr } = await supabaseAdmin
     .from("invoice_lines")
-    .select("position, type, description, unit_price_ht, quantity, tva")
+    .select(
+      "position, type, description, unit_price_ht, quantity, tva, unit_code, vat_category_code",
+    )
     .eq("invoice_id", row.id)
     .order("position", { ascending: true });
   if (linesErr || !persisted || persisted.length === 0) {
@@ -68,11 +91,64 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
     tva: Number(l.tva) as 0 | 5.5 | 10 | 20,
   }));
 
+  const isFacturx = (row.invoice_format ?? "classic_pdf") === "facturx";
+  const artisan = artisanFromSnapshot(row.artisan_snapshot as never);
+
+  // Common data model + regulatory validation happen BEFORE any rendering, so
+  // an invalid invoice never produces a downloadable document.
+  let structured: import("@/lib/facturx/structured-invoice.types").StructuredInvoiceData | null =
+    null;
+  let xml: string | null = null;
+  if (isFacturx) {
+    const { buildStructuredInvoice } = await import(
+      "@/lib/facturx/structured-invoice.server"
+    );
+    const { buildFacturxXml, validateStructuredInvoice, validateXmlSyntax } =
+      await import("@/lib/facturx/facturx-xml.server");
+    const { toCents, compareAmounts } = await import("@/lib/facturx/money.server");
+
+    structured = buildStructuredInvoice({
+      row: { ...row, ...{ total_ht: row.total_ht } },
+      lines: persisted as never,
+      artisan,
+    });
+
+    const mismatches = compareAmounts(
+      "db",
+      {
+        totalHT: toCents(Number(row.total_ht)),
+        totalTVA: toCents(Number(row.total_tva)),
+        totalTTC: toCents(Number(row.total_ttc)),
+      },
+      {
+        totalHT: structured.totals.lineTotalCents,
+        totalTVA: structured.totals.taxTotalCents,
+        totalTTC: structured.totals.grandTotalCents,
+      },
+    );
+    if (mismatches.length) {
+      await persistValidation(row.id, "invalid", mismatches.map((m) => `${m.field} : attendu ${m.expected}, obtenu ${m.actual}`));
+      throw new Error("Incohérence de montants détectée : génération interrompue.");
+    }
+
+    const rules = validateStructuredInvoice(structured);
+    if (!rules.valid) {
+      await persistValidation(row.id, "invalid", rules.errors);
+      throw new Error(`Facture non conforme EN 16931 : ${rules.errors[0]}`);
+    }
+    xml = buildFacturxXml(structured);
+    const syntax = validateXmlSyntax(xml);
+    if (!syntax.valid) {
+      await persistValidation(row.id, "invalid", syntax.errors);
+      throw new Error("XML Factur-X invalide : génération interrompue.");
+    }
+  }
+
   let bytes: Uint8Array;
   try {
     bytes = await generateInvoicePdf({
       invoiceNumber: row.invoice_number,
-      artisan: artisanFromSnapshot(row.artisan_snapshot as never),
+      artisan,
       input: {
         client_name: row.client_name,
         client_address: row.client_address,
@@ -88,6 +164,21 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
       },
       totals: computeTotals(lines),
     });
+    if (isFacturx && xml) {
+      const { toFacturxPdfA3, assertPdfA3Structure } = await import(
+        "@/lib/facturx/facturx-pdfa.server"
+      );
+      bytes = await toFacturxPdfA3(bytes, {
+        invoiceNumber: row.invoice_number,
+        producer: artisan.company || "Facturation",
+        xml,
+      });
+      const structure = await assertPdfA3Structure(bytes);
+      if (!structure.valid) {
+        await persistValidation(row.id, "invalid", structure.errors);
+        throw new Error(`PDF/A-3 non conforme : ${structure.errors[0]}`);
+      }
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await supabaseAdmin.from("invoices").update({ generation_error: msg }).eq("id", row.id);
@@ -96,11 +187,50 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
 
   const path = `invoices/${row.invoice_date.slice(0, 4)}/${row.invoice_number}.pdf`;
   await uploadDocumentPdf(path, bytes);
-  // Only the PDF-related columns are touched here.
-  await supabaseAdmin
-    .from("invoices")
-    .update({ pdf_storage_path: path, generation_error: null })
-    .eq("id", row.id);
+
+  // Only PDF/compliance columns are touched here — never the send state.
+  const compliance: Record<string, unknown> = {
+    pdf_storage_path: path,
+    generation_error: null,
+    pdf_sha256: await sha256Hex(bytes),
+  };
+  if (isFacturx && structured) {
+    const { FACTURX_CONFIG } = await import("@/lib/facturx/facturx-config.server");
+    const xmlPath = `invoices/${row.invoice_date.slice(0, 4)}/${row.invoice_number}-factur-x.xml`;
+    await supabaseAdmin.storage
+      .from(BUCKET)
+      .upload(xmlPath, new TextEncoder().encode(xml ?? ""), {
+        contentType: "application/xml",
+        upsert: true,
+      });
+    Object.assign(compliance, {
+      xml_storage_path: xmlPath,
+      facturx_version: FACTURX_CONFIG.xmpVersion,
+      facturx_profile: FACTURX_CONFIG.profileLabel,
+      facturx_validation_status: "valid",
+      facturx_validation_errors: null,
+      facturx_validated_at: new Date().toISOString(),
+      transaction_classification: structured.classification,
+      structured_invoice_snapshot: structured as unknown as Record<string, unknown>,
+    });
+  }
+  await supabaseAdmin.from("invoices").update(compliance as never).eq("id", row.id);
   row.pdf_storage_path = path;
   return bytes;
+}
+
+async function persistValidation(
+  invoiceId: string,
+  status: "valid" | "invalid" | "pending",
+  errors: string[],
+): Promise<void> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  await supabaseAdmin
+    .from("invoices")
+    .update({
+      facturx_validation_status: status,
+      facturx_validation_errors: errors.length ? (errors as never) : null,
+      facturx_validated_at: new Date().toISOString(),
+    } as never)
+    .eq("id", invoiceId);
 }
