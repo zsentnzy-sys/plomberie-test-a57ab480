@@ -48,6 +48,13 @@ function escapeLike(value: string) {
   return value.replace(/[%,()]/g, " ").trim();
 }
 
+/** Human-readable, stack-free summary of the stored validation errors. */
+function summarizeValidation(errors: unknown): string | null {
+  if (!Array.isArray(errors) || errors.length === 0) return null;
+  const first = String(errors[0]);
+  return errors.length > 1 ? `${first} (+${errors.length - 1})` : first;
+}
+
 export const listDocuments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => listSchema.parse(data))
