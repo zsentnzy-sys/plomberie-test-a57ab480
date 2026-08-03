@@ -1,21 +1,24 @@
 /**
- * Qualification script — NOT part of the runtime.
+ * Phase A qualification script — NOT part of the runtime.
  *
- * Generates a reference Factur-X invoice and validates it with the official
- * tooling (VeraPDF for PDF/A-3B, Mustangproject/Schematron for EN 16931).
- * Run it in the sandbox or CI before deploying a change to the invoicing
- * chain; the production Worker runtime cannot host a JVM.
+ * Runs the structural checks that CAN be demonstrated today and fails loudly
+ * when a required tool is missing. It NEVER concludes that the generator is
+ * qualified: the official Factur-X XSD and the EN 16931 Schematron are not
+ * integrated yet (Phase B).
  *
- *   bun run scripts/validate-facturx.ts
+ *   bun run validate:facturx
  *
- * Exit code 1 means the generated file is NOT compliant.
+ * Exit code 1 means the Phase A checks did not pass.
  */
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { renderDocumentPdf } from "../src/lib/documents.server";
+import { PDFDocument } from "@cantoo/pdf-lib";
+
+import { renderDocumentPdf, computeTotals } from "../src/lib/documents.server";
 import { ARTISAN_INFO } from "../src/lib/artisan.server";
 import { buildStructuredInvoice } from "../src/lib/facturx/structured-invoice.server";
 import {
@@ -27,10 +30,73 @@ import {
   assertPdfA3Structure,
   toFacturxPdfA3,
 } from "../src/lib/facturx/facturx-pdfa.server";
-import { computeTotals } from "../src/lib/documents.server";
+import { FACTURX_CONFIG } from "../src/lib/facturx/facturx-config.server";
+
+type StepResult = "PASS" | "FAIL" | "NOT IMPLEMENTED";
+const results: Array<[string, StepResult]> = [];
+const toolVersions: string[] = [];
+
+function record(step: string, result: StepResult) {
+  results.push([step, result]);
+  return result;
+}
+
+function fatal(step: string, detail: string): never {
+  record(step, "FAIL");
+  console.error(`\n${step} : ${detail}`);
+  report();
+  process.exit(1);
+}
+
+function report(): void {
+  console.log("\n--- Résumé Phase A ---");
+  for (const [step, result] of results) console.log(`${step}: ${result}`);
+  console.log("XSD Factur-X 1.09: NOT IMPLEMENTED");
+  console.log("Schematron EN 16931: NOT IMPLEMENTED");
+  console.log("Generator qualification: UNQUALIFIED");
+  for (const v of toolVersions) console.log(v);
+}
+
+/** Runs a required external tool. A missing binary is a hard failure. */
+function runRequired(step: string, cmd: string, args: string[]): void {
+  try {
+    const out = execFileSync(cmd, args, { encoding: "utf8" });
+    console.log(out);
+    record(step, "PASS");
+  } catch (err) {
+    const e = err as { code?: string; stdout?: string; stderr?: string };
+    if (e.code === "ENOENT") {
+      fatal(step, `${cmd} est obligatoire pour cette vérification et n'est pas installé.`);
+    }
+    console.error(e.stdout ?? "", e.stderr ?? "");
+    fatal(step, `${cmd} a signalé une non-conformité.`);
+  }
+}
+
+function toolVersion(cmd: string, args: string[]): void {
+  try {
+    const out = execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    toolVersions.push(`${cmd} version: ${out.split("\n")[0]?.trim() || "inconnue"}`);
+  } catch (err) {
+    const e = err as { code?: string; stderr?: string };
+    if (e.code === "ENOENT") {
+      fatal(`${cmd} availability`, `${cmd} est obligatoire et n'est pas installé.`);
+    }
+    const line = (e.stderr ?? "").split("\n")[0]?.trim();
+    toolVersions.push(`${cmd} version: ${line || "inconnue"}`);
+  }
+}
+
+function sha256(bytes: Uint8Array | string): string {
+  return createHash("sha256").update(bytes as never).digest("hex");
+}
 
 const outDir = join(tmpdir(), "facturx-qualification");
 mkdirSync(outDir, { recursive: true });
+
+// Required tooling is checked BEFORE any work, so a missing binary fails fast.
+toolVersion("verapdf", ["--version"]);
+toolVersion("java", ["-version"]);
 
 const lines = [
   {
@@ -73,17 +139,21 @@ const row = {
 const structured = buildStructuredInvoice({ row, lines, artisan: ARTISAN_INFO });
 
 const rules = validateStructuredInvoice(structured);
-if (!rules.valid) {
-  console.error("Règles EN 16931 non respectées :\n" + rules.errors.join("\n"));
-  process.exit(1);
-}
+if (!rules.valid) fatal("Internal business rules", rules.errors.join(" | "));
+record("Internal business rules", "PASS");
 
 const xml = buildFacturxXml(structured);
 const syntax = validateXmlSyntax(xml);
-if (!syntax.valid) {
-  console.error("XML mal formé :\n" + syntax.errors.join("\n"));
-  process.exit(1);
-}
+if (!syntax.valid) fatal("XML well-formedness", syntax.errors.join(" | "));
+record("XML well-formedness", "PASS");
+
+const typedLines = lines.map((l) => ({
+  type: l.type as "Service" | "Matériel" | "Taux horaire",
+  description: l.description,
+  unit_price_ht: l.unit_price_ht,
+  quantity: l.quantity,
+  tva: l.tva as 0 | 5.5 | 10 | 20,
+}));
 
 const pdf = await renderDocumentPdf({
   title: "FACTURE",
@@ -97,22 +167,8 @@ const pdf = await renderDocumentPdf({
   },
   clientBlockLabel: "Facturé à",
   metaLines: [`Date : 15/01/2026`, `Paiement : ${row.payment_method}`],
-  lines: lines.map((l) => ({
-    type: l.type as "Service" | "Matériel" | "Taux horaire",
-    description: l.description,
-    unit_price_ht: l.unit_price_ht,
-    quantity: l.quantity,
-    tva: l.tva as 0 | 5.5 | 10 | 20,
-  })),
-  totals: computeTotals(
-    lines.map((l) => ({
-      type: l.type as "Service" | "Matériel" | "Taux horaire",
-      description: l.description,
-      unit_price_ht: l.unit_price_ht,
-      quantity: l.quantity,
-      tva: l.tva as 0 | 5.5 | 10 | 20,
-    })),
-  ),
+  lines: typedLines,
+  totals: computeTotals(typedLines),
   legal: ARTISAN_INFO.legal,
 });
 
@@ -123,46 +179,51 @@ const hybrid = await toFacturxPdfA3(pdf, {
 });
 
 const structure = await assertPdfA3Structure(hybrid);
-if (!structure.valid) {
-  console.error("Auto-contrôles PDF/A-3 en échec :\n" + structure.errors.join("\n"));
-  process.exit(1);
-}
+if (!structure.valid) fatal("Internal PDF/A-3 self-checks", structure.errors.join(" | "));
+record("Internal PDF/A-3 self-checks", "PASS");
 
 const pdfPath = join(outDir, "reference.pdf");
 const xmlPath = join(outDir, "factur-x.xml");
 writeFileSync(pdfPath, hybrid);
 writeFileSync(xmlPath, xml);
+if (!existsSync(pdfPath) || !existsSync(xmlPath)) {
+  fatal("Reference invoice", "la facture de référence n'a pas été écrite sur le disque.");
+}
 console.log(`Fichiers générés :\n  ${pdfPath}\n  ${xmlPath}`);
 
-function run(cmd: string, args: string[]): boolean {
-  try {
-    const out = execFileSync(cmd, args, { encoding: "utf8" });
-    console.log(out);
-    return true;
-  } catch (err) {
-    const e = err as { status?: number; stdout?: string; stderr?: string; code?: string };
-    if (e.code === "ENOENT") {
-      console.warn(`⚠ ${cmd} indisponible : validation externe ignorée.`);
-      return true;
-    }
-    console.error(e.stdout ?? "", e.stderr ?? "");
-    return false;
-  }
+// --- Embedded XML extraction & consistency -------------------------------
+const reloaded = await PDFDocument.load(hybrid, { updateMetadata: false });
+const attachments = (await reloaded.getAttachments?.()) ?? [];
+const embedded = attachments.find((a) => a.name === FACTURX_CONFIG.attachmentFileName);
+if (!embedded?.data) {
+  fatal("Embedded XML extraction", "impossible d'extraire factur-x.xml du PDF généré.");
 }
+record("Embedded XML extraction", "PASS");
 
-// VeraPDF : conformité PDF/A-3B. Mustangproject : Schematron EN 16931.
-const veraOk = run("verapdf", ["-f", "3b", "--format", "text", pdfPath]);
-const mustangOk = run("java", [
-  "-jar",
-  process.env["MUSTANG_JAR"] ?? "Mustang-CLI.jar",
-  "--action",
-  "validate",
-  "--source",
+const generatedHash = sha256(new TextEncoder().encode(xml));
+const embeddedHash = sha256(new Uint8Array(embedded.data as unknown as ArrayBufferLike));
+if (generatedHash !== embeddedHash) {
+  fatal(
+    "Embedded XML consistency",
+    `empreintes différentes (généré ${generatedHash.slice(0, 12)}… / embarqué ${embeddedHash.slice(0, 12)}…).`,
+  );
+}
+record("Embedded XML consistency", "PASS");
+
+// --- PDF/A-3B conformance (VeraPDF, obligatoire) -------------------------
+runRequired("PDF/A-3B VeraPDF", "verapdf", [
+  "-f",
+  "3b",
+  "--format",
+  "text",
   pdfPath,
 ]);
 
-if (!veraOk || !mustangOk) {
-  console.error("❌ Qualification Factur-X en échec.");
-  process.exit(1);
-}
-console.log("✅ Qualification Factur-X réussie.");
+report();
+console.log(
+  "\nVérifications Phase A réussies.\n" +
+    "Le générateur reste NON QUALIFIÉ tant que les validations officielles XSD " +
+    "et Schematron EN 16931 ne sont pas intégrées (Phase B).\n" +
+    `Version de spécification implémentée : ${FACTURX_CONFIG.implementedSpecificationVersion} ` +
+    `(cible Phase B : ${FACTURX_CONFIG.targetSpecificationVersion}).`,
+);

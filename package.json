@@ -10,10 +10,13 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
     "test:unit": "vitest run",
-    "test;unit:watch": "vitest",
+    "test:unit:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e;ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "validate:facturx": "bun run scripts/validate-facturx.ts",
+    "verify": "bun run typecheck && bun run lint && bun run test:unit && bun run build"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "^2.7.4",
