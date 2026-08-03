@@ -10,7 +10,8 @@
  *
  * Exit code 1 means the Phase A checks did not pass.
  */
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { parseVeraPdfReport } from "./lib/verapdf-report.js";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -71,6 +72,100 @@ function runRequired(step: string, cmd: string, args: string[]): void {
     console.error(e.stdout ?? "", e.stderr ?? "");
     fatal(step, `${cmd} a signalé une non-conformité.`);
   }
+}
+
+function runVeraPdfValidation(pdfPath: string, reportPath: string): void {
+  const execution = spawnSync(
+    "verapdf",
+    [
+      "-f",
+      "3b",
+      "--format",
+      "xml",
+      "--loglevel",
+      "1",
+      pdfPath,
+    ],
+    {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+
+  if (execution.error) {
+    const code = (execution.error as NodeJS.ErrnoException).code;
+
+    if (code === "ENOENT") {
+      fatal(
+        "PDF/A-3B VeraPDF",
+        "verapdf est obligatoire pour cette vérification et n'est pas installé.",
+      );
+    }
+
+    fatal(
+      "PDF/A-3B VeraPDF",
+      `impossible d'exécuter VeraPDF : ${execution.error.message}`,
+    );
+  }
+
+  const reportXml = execution.stdout ?? "";
+  const logs = execution.stderr ?? "";
+
+  writeFileSync(reportPath, reportXml, "utf8");
+  writeFileSync(`${reportPath}.log`, logs, "utf8");
+
+  if (!reportXml.trim()) {
+    fatal(
+      "PDF/A-3B VeraPDF",
+      `VeraPDF n'a produit aucun rapport. Code de sortie : ${execution.status ?? "inconnu"}.`,
+    );
+  }
+
+  let parsed: ReturnType<typeof parseVeraPdfReport>;
+
+  try {
+    parsed = parseVeraPdfReport(reportXml);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "rapport illisible";
+
+    fatal(
+      "PDF/A-3B VeraPDF",
+      `rapport machine-readable invalide : ${message}`,
+    );
+  }
+
+  if (!parsed.compliant) {
+    fatal(
+      "PDF/A-3B VeraPDF",
+      [
+        "document non conforme PDF/A-3B",
+        `failedRules=${parsed.failedRules}`,
+        `failedChecks=${parsed.failedChecks}`,
+        `nonCompliant=${parsed.nonCompliantReports}`,
+        `failedJobs=${parsed.failedJobs}`,
+        `failedToParse=${parsed.failedToParse}`,
+        `veraExceptions=${parsed.veraExceptions}`,
+      ].join(", "),
+    );
+  }
+
+  if (execution.status !== 0) {
+    fatal(
+      "PDF/A-3B VeraPDF",
+      `le rapport indique une conformité, mais VeraPDF a terminé avec le code ${execution.status}.`,
+    );
+  }
+
+  console.log(
+    [
+      "VeraPDF confirme la conformité PDF/A-3B",
+      `failedRules=${parsed.failedRules}`,
+      `failedChecks=${parsed.failedChecks}`,
+    ].join(" — "),
+  );
+
+  record("PDF/A-3B VeraPDF", "PASS");
 }
 
 function toolVersion(cmd: string, args: string[]): void {
@@ -184,6 +279,7 @@ record("Internal PDF/A-3 self-checks", "PASS");
 
 const pdfPath = join(outDir, "reference.pdf");
 const xmlPath = join(outDir, "factur-x.xml");
+const veraPdfReportPath = join(outDir, "verapdf-report.xml");
 writeFileSync(pdfPath, hybrid);
 writeFileSync(xmlPath, xml);
 if (!existsSync(pdfPath) || !existsSync(xmlPath)) {
@@ -211,13 +307,7 @@ if (generatedHash !== embeddedHash) {
 record("Embedded XML consistency", "PASS");
 
 // --- PDF/A-3B conformance (VeraPDF, obligatoire) -------------------------
-runRequired("PDF/A-3B VeraPDF", "verapdf", [
-  "-f",
-  "3b",
-  "--format",
-  "text",
-  pdfPath,
-]);
+runVeraPdfValidation(pdfPath, veraPdfReportPath);
 
 report();
 console.log(
