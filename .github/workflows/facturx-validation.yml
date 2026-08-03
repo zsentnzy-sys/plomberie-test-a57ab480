@@ -1,0 +1,103 @@
+name: Factur-X Phase A structural checks
+
+# Phase A only: structural PDF/A-3B checks + internal self-checks.
+# This workflow does NOT perform official Factur-X XSD / EN 16931 Schematron
+# validation and never qualifies the generator.
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/facturx/**"
+      - "src/lib/documents.server.ts"
+      - "src/lib/invoices.server.ts"
+      - "src/lib/invoices-pdf.server.ts"
+      - "src/lib/invoices.functions.ts"
+      - "scripts/validate-facturx.ts"
+      - "supabase/migrations/**"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/facturx-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/lib/facturx/**"
+      - "src/lib/documents.server.ts"
+      - "src/lib/invoices.server.ts"
+      - "src/lib/invoices-pdf.server.ts"
+      - "src/lib/invoices.functions.ts"
+      - "scripts/validate-facturx.ts"
+      - "supabase/migrations/**"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/facturx-validation.yml"
+  workflow_dispatch:
+
+env:
+  VERAPDF_VERSION: "1.26.5"
+  VERAPDF_SHA256: "0f3f4dd68a0f9c0b4e2f6a7ec9ec0a4d0f27ff21a8b5b1c9de5a67f8b6b3f8bb"
+
+jobs:
+  structural-checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2.21"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Unit tests
+        run: bun run test:unit
+
+      - name: Build
+        run: bun run build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install VeraPDF (pinned + checksum verified)
+        run: |
+          set -euo pipefail
+          url="https://software.verapdf.org/releases/${VERAPDF_VERSION}/verapdf-greenfield-${VERAPDF_VERSION}-installer.zip"
+          curl -sSL --fail "$url" -o verapdf.zip
+          echo "${VERAPDF_SHA256}  verapdf.zip" | sha256sum -c -
+          unzip -q verapdf.zip -d verapdf-installer
+          installer=$(find verapdf-installer -name 'verapdf-izpack-installer-*.jar' | head -n1)
+          cat > auto-install.xml <<'XML'
+          <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+          <AutomatedInstallation langpack="eng">
+            <com.izforge.izpack.panels.htmlhello.HTMLHelloPanel id="welcome"/>
+            <com.izforge.izpack.panels.target.TargetPanel id="install_dir">
+              <installpath>${{ github.workspace }}/verapdf</installpath>
+            </com.izforge.izpack.panels.target.TargetPanel>
+            <com.izforge.izpack.panels.packs.PacksPanel id="sdk_pack_select">
+              <pack index="0" name="veraPDF GUI" selected="true"/>
+              <pack index="1" name="veraPDF Mac and *nix Scripts" selected="true"/>
+            </com.izforge.izpack.panels.packs.PacksPanel>
+            <com.izforge.izpack.panels.install.InstallPanel id="install"/>
+            <com.izforge.izpack.panels.finish.FinishPanel id="finish"/>
+          </AutomatedInstallation>
+          XML
+          java -jar "$installer" auto-install.xml
+          echo "${{ github.workspace }}/verapdf" >> "$GITHUB_PATH"
+
+      - name: Factur-X Phase A checks
+        run: bun run validate:facturx | tee facturx-report.txt
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: facturx-phase-a-report
+          path: |
+            facturx-report.txt
+            /tmp/facturx-qualification/**
+          if-no-files-found: warn
