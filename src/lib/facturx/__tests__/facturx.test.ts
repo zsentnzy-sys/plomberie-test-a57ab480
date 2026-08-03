@@ -1,12 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { centsToDecimalString, lineNetCents, toCents, vatCents } from "../money.server";
-import { paymentMeansCode, unitCodeForLineType, vatCategoryCode } from "../codes.server";
+import {
+  centsToDecimalString,
+  lineNetCents,
+  toCents,
+  vatCents,
+} from "../money.server";
+import {
+  paymentMeansCode,
+  unitCodeForLineType,
+  vatCategoryCode,
+} from "../codes.server";
 import {
   assertRegulatoryConsistency,
   classifyTransaction,
 } from "../classification.server";
-import { buildStructuredInvoice, parsePostalAddress } from "../structured-invoice.server";
+import {
+  buildStructuredInvoice,
+  parsePostalAddress,
+} from "../structured-invoice.server";
 import {
   buildFacturxXml,
   escapeXml,
@@ -90,23 +102,42 @@ describe("code mapping", () => {
 describe("classification", () => {
   it("classifies from country and customer type", () => {
     expect(
-      classifyTransaction({ customerType: "individual", customerCountryCode: "FR" }),
+      classifyTransaction({
+        customerType: "individual",
+        customerCountryCode: "FR",
+      }),
     ).toBe("b2c_france");
+
     expect(
-      classifyTransaction({ customerType: "company", customerCountryCode: "FR" }),
+      classifyTransaction({
+        customerType: "company",
+        customerCountryCode: "FR",
+      }),
     ).toBe("b2b_france");
+
     expect(
-      classifyTransaction({ customerType: "company", customerCountryCode: "BE" }),
+      classifyTransaction({
+        customerType: "company",
+        customerCountryCode: "BE",
+      }),
     ).toBe("b2b_international");
+
     expect(
-      classifyTransaction({ customerType: "public_sector", customerCountryCode: "FR" }),
+      classifyTransaction({
+        customerType: "public_sector",
+        customerCountryCode: "FR",
+      }),
     ).toBe("public_sector");
   });
 
   it("requires a SIREN for French professionals only", () => {
     expect(() =>
-      assertRegulatoryConsistency({ customerType: "company", customerCountryCode: "FR" }),
+      assertRegulatoryConsistency({
+        customerType: "company",
+        customerCountryCode: "FR",
+      }),
     ).toThrow(/SIREN/);
+
     expect(() =>
       assertRegulatoryConsistency({
         customerType: "individual",
@@ -114,6 +145,7 @@ describe("classification", () => {
         customerSiren: "123456789",
       }),
     ).toThrow(/particulier/);
+
     expect(() =>
       assertRegulatoryConsistency({
         customerType: "individual",
@@ -131,33 +163,132 @@ describe("structured invoice + XML", () => {
   });
 
   it("parses postal addresses", () => {
-    const a = parsePostalAddress("5 avenue de la Gare\n57000 Metz", "FR");
-    expect(a.postcode).toBe("57000");
-    expect(a.city).toBe("Metz");
-    expect(a.lines).toEqual(["5 avenue de la Gare"]);
+    const address = parsePostalAddress(
+      "5 avenue de la Gare\n57000 Metz",
+      "FR",
+    );
+
+    expect(address.postcode).toBe("57000");
+    expect(address.city).toBe("Metz");
+    expect(address.lines).toEqual(["5 avenue de la Gare"]);
   });
 
   it("computes coherent totals in cents", () => {
     expect(data.totals.lineTotalCents).toBe(25990);
     expect(data.totals.taxTotalCents).toBe(3899);
     expect(data.totals.grandTotalCents).toBe(29889);
-    expect(data.vatBreakdown.map((v) => v.rate)).toEqual([10, 20]);
+    expect(data.vatBreakdown.map((value) => value.rate)).toEqual([10, 20]);
   });
 
   it("passes the EN 16931 rule subset", () => {
-    expect(validateStructuredInvoice(data)).toEqual({ valid: true, errors: [] });
+    expect(validateStructuredInvoice(data)).toEqual({
+      valid: true,
+      errors: [],
+    });
   });
 
   it("escapes XML special characters", () => {
-    expect(escapeXml('a & b < c > "d"')).toBe("a &amp; b &lt; c &gt; &quot;d&quot;");
+    expect(escapeXml('a & b < c > "d"')).toBe(
+      "a &amp; b &lt; c &gt; &quot;d&quot;",
+    );
+
     const xml = buildFacturxXml(data);
+
     expect(xml).toContain("Client &amp; Fils &lt;SARL&gt;");
     expect(xml).toContain("urn:cen.eu:en16931:2017");
-    expect(validateXmlSyntax(xml).valid).toBe(true);
+  });
+
+  it("accepts the generated Factur-X XML with a real parser", () => {
+    const xml = buildFacturxXml(data);
+
+    expect(validateXmlSyntax(xml)).toEqual({
+      valid: true,
+      errors: [],
+    });
+  });
+
+  it("rejects incorrectly nested XML elements", () => {
+    const result = validateXmlSyntax(
+      '<?xml version="1.0" encoding="UTF-8"?><root><a><b></a></b></root>',
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.length).toBeGreaterThan(0);
+  });
+
+  it("rejects an attribute without quotes", () => {
+    const result = validateXmlSyntax(
+      '<?xml version="1.0" encoding="UTF-8"?><root id=123></root>',
+    );
+
+    expect(result.valid).toBe(false);
+  });
+
+  it("rejects an unknown XML entity", () => {
+    const result = validateXmlSyntax(
+      '<?xml version="1.0" encoding="UTF-8"?><root>Client &inconnue;</root>',
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/entité.*inconnue/i);
+  });
+
+  it("rejects multiple root elements", () => {
+    const result = validateXmlSyntax(
+      '<?xml version="1.0" encoding="UTF-8"?><first></first><second></second>',
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.join(" ")).toMatch(/racine/i);
+  });
+
+  it("rejects an empty XML document", () => {
+    expect(validateXmlSyntax("")).toEqual({
+      valid: false,
+      errors: ["XML — document vide"],
+    });
+  });
+
+  it("rejects a missing UTF-8 declaration", () => {
+    const result = validateXmlSyntax("<root></root>");
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain(
+      "XML — déclaration XML UTF-8 manquante ou invalide",
+    );
+  });
+
+  it("rejects XML documents containing a DOCTYPE", () => {
+    const result = validateXmlSyntax(
+      '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE root><root></root>',
+    );
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain(
+      "XML — déclaration DOCTYPE interdite",
+    );
+  });
+
+  it("accepts predefined and numeric XML entities", () => {
+    const result = validateXmlSyntax(
+      '<?xml version="1.0" encoding="UTF-8"?><root>&amp; &lt; &#65; &#x41;</root>',
+    );
+
+    expect(result).toEqual({
+      valid: true,
+      errors: [],
+    });
   });
 
   it("rejects an inconsistent total", () => {
-    const broken = { ...data, totals: { ...data.totals, grandTotalCents: 1 } };
+    const broken = {
+      ...data,
+      totals: {
+        ...data.totals,
+        grandTotalCents: 1,
+      },
+    };
+
     expect(validateStructuredInvoice(broken).valid).toBe(false);
   });
 });

@@ -239,8 +239,8 @@ record("Internal business rules", "PASS");
 
 const xml = buildFacturxXml(structured);
 const syntax = validateXmlSyntax(xml);
-if (!syntax.valid) fatal("XML well-formedness", syntax.errors.join(" | "));
-record("XML well-formedness", "PASS");
+if (!syntax.valid) fatal("XML well-formedness (parser)", syntax.errors.join(" | "));
+record("XML well-formedness (parser)", "PASS");
 
 const typedLines = lines.map((l) => ({
   type: l.type as "Service" | "Matériel" | "Taux horaire",

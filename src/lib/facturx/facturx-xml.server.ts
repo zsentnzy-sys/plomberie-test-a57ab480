@@ -1,6 +1,8 @@
 // CII (UN/CEFACT Cross Industry Invoice) generation for the EN 16931 profile.
 // Three clearly separated stages: mapping -> serialisation -> validation.
 
+import { SyntaxValidator } from "fast-xml-validator";
+
 import {
   VALID_PAYMENT_MEANS,
   VALID_UNIT_CODES,
@@ -18,6 +20,8 @@ import type {
 // ---------------------------------------------------------------------------
 // Serialisation primitives (no raw concatenation of untrusted values)
 // ---------------------------------------------------------------------------
+
+const xmlSyntaxValidator = new SyntaxValidator();
 
 export function escapeXml(value: string): string {
   return value
@@ -400,25 +404,134 @@ export function validateStructuredInvoice(
   return { valid: e.length === 0, errors: e };
 }
 
-/** Cheap well-formedness guard: tags balanced and declaration present. */
-export function validateXmlSyntax(xml: string): XmlValidationResult {
-  const errors: string[] = [];
-  if (!xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>'))
-    errors.push("XML — déclaration UTF-8 manquante");
-  const stack: string[] = [];
-  const tag = /<\/?([A-Za-z_][\w.:-]*)([^>]*?)(\/?)>/g;
-  let m: RegExpExecArray | null;
-  while ((m = tag.exec(xml))) {
-    if (m[0].startsWith("<?") || m[0].startsWith("<!")) continue;
-    if (m[0].startsWith("</")) {
-      if (stack.pop() !== m[1]) {
-        errors.push(`XML — balise fermante inattendue </${m[1]}>`);
-        break;
-      }
-    } else if (!m[3]) {
-      stack.push(m[1]);
+function findInvalidXmlEntity(xml: string): string | null {
+  const entityPattern = /&([^;\s<&]+);/g;
+  const allowedNamedEntities = new Set([
+    "amp",
+    "lt",
+    "gt",
+    "quot",
+    "apos",
+  ]);
+
+  let match: RegExpExecArray | null;
+
+  while ((match = entityPattern.exec(xml))) {
+    const entity = match[1];
+
+    const isNamedEntity = allowedNamedEntities.has(entity);
+    const isDecimalEntity = /^#[0-9]+$/.test(entity);
+    const isHexadecimalEntity = /^#x[0-9a-f]+$/i.test(entity);
+
+    if (!isNamedEntity && !isDecimalEntity && !isHexadecimalEntity) {
+      return entity;
     }
   }
-  if (stack.length) errors.push(`XML — balise non fermée <${stack[stack.length - 1]}>`);
-  return { valid: errors.length === 0, errors };
+
+  return null;
+}
+
+function countXmlRootElements(xml: string): number {
+  const withoutSpecialSections = xml
+    .replace(/<\?xml[\s\S]*?\?>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "")
+    .replace(/<\?[\s\S]*?\?>/g, "");
+
+  const tagPattern =
+    /<\s*(\/?)\s*([A-Za-z_][\w.:-]*)(?:\s[^<>]*?)?(\/?)\s*>/g;
+
+  let depth = 0;
+  let rootCount = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = tagPattern.exec(withoutSpecialSections))) {
+    const isClosingTag = match[1] === "/";
+    const isSelfClosingTag = match[3] === "/";
+
+    if (isClosingTag) {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+
+    if (depth === 0) {
+      rootCount += 1;
+    }
+
+    if (!isSelfClosingTag) {
+      depth += 1;
+    }
+  }
+
+  return rootCount;
+}
+
+/**
+ * Performs real XML 1.0 syntactic validation.
+ *
+ * This checks XML well-formedness only. It does not perform Factur-X XSD
+ * validation, EN 16931 Schematron validation or business-rule validation.
+ */
+export function validateXmlSyntax(xml: string): XmlValidationResult {
+  const trimmed = xml.trim();
+
+  if (!trimmed) {
+    return {
+      valid: false,
+      errors: ["XML — document vide"],
+    };
+  }
+
+  const errors: string[] = [];
+
+  const declaration =
+    /^<\?xml\s+version=(["'])1\.0\1\s+encoding=(["'])UTF-8\2\s*\?>/i;
+
+  if (!declaration.test(trimmed)) {
+    errors.push("XML — déclaration XML UTF-8 manquante ou invalide");
+  }
+
+  if (/<!DOCTYPE/i.test(trimmed)) {
+    errors.push("XML — déclaration DOCTYPE interdite");
+  }
+
+  const invalidEntity = findInvalidXmlEntity(trimmed);
+  if (invalidEntity) {
+    errors.push(`XML — entité inconnue : &${invalidEntity};`);
+  }
+
+  const rootCount = countXmlRootElements(trimmed);
+  
+  if (rootCount !== 1) {
+    errors.push(`XML - un seul élément racine attendu, ${rootCount} trouvé(s)`);
+  }
+
+  try {
+    xmlSyntaxValidator.validate(trimmed);
+  } catch (error) {
+    const detail = error as {
+      message?: string;
+      code?: string;
+      line?: number;
+      col?: number;
+    };
+
+    const location =
+      typeof detail.line === "number" && typeof detail.col === "number"
+        ? `ligne ${detail.line}, colonne ${detail.col}`
+        : typeof detail.col === "number"
+          ? `colonne ${detail.col}`
+          : "position inconnue";
+
+    const code = detail.code ? ` [${detail.code}]` : "";
+
+    errors.push(
+      `XML — ${detail.message ?? "document XML mal formé"}${code} (${location})`,
+    );
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
 }
