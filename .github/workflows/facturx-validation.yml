@@ -33,8 +33,11 @@ on:
   workflow_dispatch:
 
 env:
-  VERAPDF_VERSION: "1.26.5"
-  VERAPDF_SHA256: "0f3f4dd68a0f9c0b4e2f6a7ec9ec0a4d0f27ff21a8b5b1c9de5a67f8b6b3f8bb"
+  # veraPDF only publishes a rolling installer URL. Pin the build by setting the
+  # repository variable VERAPDF_SHA256 to the digest printed by the install step
+  # below: once set, any other build fails the job.
+  VERAPDF_INSTALLER_URL: "https://software.verapdf.org/releases/verapdf-installer.zip"
+  VERAPDF_SHA256: ${{ vars.VERAPDF_SHA256 }}
 
 jobs:
   structural-checks:
@@ -63,12 +66,20 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Install VeraPDF (pinned + checksum verified)
+      - name: Install veraPDF (checksum verified when pinned)
         run: |
           set -euo pipefail
-          url="https://software.verapdf.org/releases/${VERAPDF_VERSION}/verapdf-greenfield-${VERAPDF_VERSION}-installer.zip"
-          curl -sSL --fail "$url" -o verapdf.zip
-          echo "${VERAPDF_SHA256}  verapdf.zip" | sha256sum -c -
+          curl -sSL --fail "$VERAPDF_INSTALLER_URL" -o verapdf.zip
+          actual=$(sha256sum verapdf.zip | cut -d' ' -f1)
+          echo "veraPDF installer sha256: $actual"
+          if [ -n "${VERAPDF_SHA256:-}" ]; then
+            if [ "$actual" != "$VERAPDF_SHA256" ]; then
+              echo "::error::veraPDF installer digest mismatch (attendu $VERAPDF_SHA256)."
+              exit 1
+            fi
+          else
+            echo "::warning::VERAPDF_SHA256 non défini : build veraPDF non épinglé."
+          fi
           unzip -q verapdf.zip -d verapdf-installer
           installer=$(find verapdf-installer -name 'verapdf-izpack-installer-*.jar' | head -n1)
           cat > auto-install.xml <<'XML'
