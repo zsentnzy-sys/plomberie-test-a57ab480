@@ -24,7 +24,14 @@ export interface HistoryRow {
   /** Invoices only: 'facturx' | 'classic_pdf'. */
   format?: string;
   facturxProfile?: string | null;
-  validationStatus?: string | null;
+  /** Implemented Factur-X specification version actually persisted. */
+  facturxVersion?: string | null;
+  /** Internal self-checks only — never a claim of official conformity. */
+  runtimeValidationStatus?: string | null;
+  generatorQualificationStatus?: string | null;
+  externalValidationStatus?: string | null;
+  generatorVersion?: string | null;
+  validationArtifactsVersion?: string | null;
   validationSummary?: string | null;
 }
 
@@ -71,7 +78,7 @@ export const listDocuments = createServerFn({ method: "POST" })
       let q = context.supabase
         .from("invoices")
         .select(
-          "id, invoice_number, client_name, client_address, client_email, created_at, total_ttc, status, sent_at, pdf_storage_path, invoice_format, facturx_profile, facturx_validation_status, facturx_validation_errors",
+          "id, invoice_number, client_name, client_address, client_email, created_at, total_ttc, status, sent_at, pdf_storage_path, invoice_format, facturx_profile, facturx_version, runtime_validation_status, generator_qualification_status, external_validation_status, generator_version, validation_artifacts_version, facturx_validation_errors",
           { count: "exact" },
         )
         .order("created_at", { ascending: false })
@@ -101,7 +108,12 @@ export const listDocuments = createServerFn({ method: "POST" })
           hasPdf: Boolean(r.pdf_storage_path),
           format: r.invoice_format ?? "classic_pdf",
           facturxProfile: r.facturx_profile ?? null,
-          validationStatus: r.facturx_validation_status ?? null,
+          facturxVersion: r.facturx_version ?? null,
+          runtimeValidationStatus: r.runtime_validation_status ?? null,
+          generatorQualificationStatus: r.generator_qualification_status ?? null,
+          externalValidationStatus: r.external_validation_status ?? null,
+          generatorVersion: r.generator_version ?? null,
+          validationArtifactsVersion: r.validation_artifacts_version ?? null,
           validationSummary: summarizeValidation(r.facturx_validation_errors),
         })),
         total: count ?? 0,
