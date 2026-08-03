@@ -12,14 +12,6 @@ export const OWNER_EMAIL = 'sentnzy@gmail.com'
 
 export const PUBLIC_REPLY_TO_MAIL = 'contact@normalweb.cloud'
 
-function generateToken(): string {
-  const bytes = new Uint8Array(32)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-}
-
 /**
  * Render a registered transactional template and enqueue it for delivery.
  * Safe to call from public server functions — uses the service-role client.
@@ -66,31 +58,6 @@ export async function enqueueTransactionalEmail(params: {
       return false
     }
 
-    // Get or create an unsubscribe token (one per email)
-    let unsubscribeToken: string
-    const { data: existingToken } = await supabaseAdmin
-      .from('email_unsubscribe_tokens')
-      .select('token, used_at')
-      .eq('email', normalizedEmail)
-      .maybeSingle()
-    if (existingToken && !existingToken.used_at) {
-      unsubscribeToken = existingToken.token
-    } else {
-      unsubscribeToken = generateToken()
-      await supabaseAdmin
-        .from('email_unsubscribe_tokens')
-        .upsert(
-          { token: unsubscribeToken, email: normalizedEmail },
-          { onConflict: 'email', ignoreDuplicates: true },
-        )
-      const { data: stored } = await supabaseAdmin
-        .from('email_unsubscribe_tokens')
-        .select('token')
-        .eq('email', normalizedEmail)
-        .maybeSingle()
-      if (stored?.token) unsubscribeToken = stored.token
-    }
-
     const element = React.createElement(template.component, params.templateData || {})
     const html = await render(element)
     const text = await render(element, { plainText: true })
@@ -120,7 +87,6 @@ export async function enqueueTransactionalEmail(params: {
         purpose: 'transactional',
         label: params.templateName,
         idempotency_key: params.idempotencyKey,
-        unsubscribe_token: unsubscribeToken,
         queued_at: new Date().toISOString(),
       },
     })

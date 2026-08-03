@@ -72,14 +72,17 @@ jobs:
           curl -sSL --fail "$VERAPDF_INSTALLER_URL" -o verapdf.zip
           actual=$(sha256sum verapdf.zip | cut -d' ' -f1)
           echo "veraPDF installer sha256: $actual"
-          if [ -n "${VERAPDF_SHA256:-}" ]; then
-            if [ "$actual" != "$VERAPDF_SHA256" ]; then
-              echo "::error::veraPDF installer digest mismatch (attendu $VERAPDF_SHA256)."
-              exit 1
-            fi
-          else
-            echo "::warning::VERAPDF_SHA256 non défini : build veraPDF non épinglé."
+          if [ -z "${VERAPDF_SHA256:-}" ]; then
+            echo "::error::VERAPDF_SHA256 n'est pas défini. L'installation de veraPDF ne peut pas être vérifiée."
+            exit 1
           fi
+          if [ "$actual" != "$VERAPDF_SHA256" ]; then
+            echo "::error::Empreinte veraPDF incorrecte."
+            echo "::error::Attendue : $VERAPDF_SHA256"
+            echo "::error::Obtenue  : $actual"
+            exit 1
+          fi
+          echo "Empreinte veraPDF vérifiée : $actual"
           unzip -q verapdf.zip -d verapdf-installer
           installer=$(find verapdf-installer -name 'verapdf-izpack-installer-*.jar' | head -n1)
           cat > auto-install.xml <<'XML'

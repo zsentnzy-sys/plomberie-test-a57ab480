@@ -234,7 +234,6 @@ export const Route = createFileRoute("/lovable/email/queue/process")({
                   purpose: payload.purpose,
                   label: payload.label,
                   idempotency_key: payload.idempotency_key,
-                  unsubscribe_token: payload.unsubscribe_token,
                   message_id: payload.message_id,
                 },
                 { apiKey, sendUrl: process.env.LOVABLE_SEND_URL }
