@@ -198,20 +198,41 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
     generation_error: null,
     pdf_sha256: await sha256Hex(bytes),
   };
+  if (!isFacturx) {
+    Object.assign(compliance, {
+      runtime_validation_status: "not_applicable",
+      external_validation_status: "not_applicable",
+      generator_qualification_status: "unqualified",
+    });
+  }
   if (isFacturx && structured) {
-    const { FACTURX_CONFIG } = await import("@/lib/facturx/facturx-config.server");
+    const { FACTURX_CONFIG, GENERATOR_QUALIFICATION } = await import(
+      "@/lib/facturx/facturx-config.server"
+    );
     const xmlPath = `invoices/${row.invoice_date.slice(0, 4)}/${row.invoice_number}-factur-x.xml`;
-    await supabaseAdmin.storage
+    const xmlUpload = await supabaseAdmin.storage
       .from(BUCKET)
       .upload(xmlPath, new TextEncoder().encode(xml ?? ""), {
         contentType: "application/xml",
         upsert: true,
       });
+    if (xmlUpload.error) {
+      throw new Error("Écriture du XML Factur-X impossible : génération interrompue.");
+    }
     Object.assign(compliance, {
       xml_storage_path: xmlPath,
-      facturx_version: FACTURX_CONFIG.xmpVersion,
+      // The version actually implemented by this generator — never the XMP value.
+      facturx_version: FACTURX_CONFIG.implementedSpecificationVersion,
       facturx_profile: FACTURX_CONFIG.profileLabel,
-      facturx_validation_status: "valid",
+      generator_version: FACTURX_CONFIG.generatorVersion,
+      document_schema_version: FACTURX_CONFIG.documentSchemaVersion,
+      validation_artifacts_version: FACTURX_CONFIG.validationArtifactsVersion,
+      // Internal self-checks only. Never a claim of official conformity.
+      runtime_validation_status: "passed",
+      generator_qualification_status: GENERATOR_QUALIFICATION,
+      external_validation_status: "not_run",
+      // Deprecated column, kept for backward compatibility only.
+      facturx_validation_status: "pending",
       facturx_validation_errors: null,
       facturx_validated_at: new Date().toISOString(),
       transaction_classification: structured.classification,
@@ -223,16 +244,23 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
   return bytes;
 }
 
-async function persistValidation(
+/**
+ * Persists the result of the INTERNAL self-checks only. It never touches the
+ * generator qualification nor the external validation status: neither can be
+ * earned at runtime.
+ */
+async function persistRuntimeValidation(
   invoiceId: string,
-  status: "valid" | "invalid" | "pending",
+  status: "passed" | "failed" | "pending",
   errors: string[],
 ): Promise<void> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   await supabaseAdmin
     .from("invoices")
     .update({
-      facturx_validation_status: status,
+      runtime_validation_status: status,
+      generator_qualification_status: "unqualified",
+      external_validation_status: "not_run",
       facturx_validation_errors: errors.length ? (errors as never) : null,
       facturx_validated_at: new Date().toISOString(),
     } as never)
