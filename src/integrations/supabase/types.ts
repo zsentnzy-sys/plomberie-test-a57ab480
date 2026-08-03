@@ -297,6 +297,7 @@ export type Database = {
           customer_vat_number: string | null
           delivery_address: string | null
           delivery_date: string | null
+          document_schema_version: string | null
           e_invoice_error: string | null
           e_invoice_provider: string | null
           e_invoice_reference: string | null
@@ -306,12 +307,15 @@ export type Database = {
           email_artisan_status: string
           email_client_error: string | null
           email_client_status: string
+          external_validation_status: string
           facturx_profile: string | null
           facturx_validated_at: string | null
           facturx_validation_errors: Json | null
           facturx_validation_status: string
           facturx_version: string | null
           generation_error: string | null
+          generator_qualification_status: string
+          generator_version: string | null
           id: string
           idempotency_key: string
           invoice_date: string
@@ -325,6 +329,7 @@ export type Database = {
           pdf_sha256: string | null
           pdf_storage_path: string | null
           purchase_order_reference: string | null
+          runtime_validation_status: string
           sent_at: string | null
           service_period_end: string | null
           service_period_start: string | null
@@ -336,6 +341,7 @@ export type Database = {
           total_tva: number
           transaction_classification: string | null
           updated_at: string
+          validation_artifacts_version: string | null
           vat_on_debits: boolean
           xml_storage_path: string | null
         }
@@ -355,6 +361,7 @@ export type Database = {
           customer_vat_number?: string | null
           delivery_address?: string | null
           delivery_date?: string | null
+          document_schema_version?: string | null
           e_invoice_error?: string | null
           e_invoice_provider?: string | null
           e_invoice_reference?: string | null
@@ -364,12 +371,15 @@ export type Database = {
           email_artisan_status?: string
           email_client_error?: string | null
           email_client_status?: string
+          external_validation_status?: string
           facturx_profile?: string | null
           facturx_validated_at?: string | null
           facturx_validation_errors?: Json | null
           facturx_validation_status?: string
           facturx_version?: string | null
           generation_error?: string | null
+          generator_qualification_status?: string
+          generator_version?: string | null
           id?: string
           idempotency_key: string
           invoice_date: string
@@ -383,6 +393,7 @@ export type Database = {
           pdf_sha256?: string | null
           pdf_storage_path?: string | null
           purchase_order_reference?: string | null
+          runtime_validation_status?: string
           sent_at?: string | null
           service_period_end?: string | null
           service_period_start?: string | null
@@ -394,6 +405,7 @@ export type Database = {
           total_tva: number
           transaction_classification?: string | null
           updated_at?: string
+          validation_artifacts_version?: string | null
           vat_on_debits?: boolean
           xml_storage_path?: string | null
         }
@@ -413,6 +425,7 @@ export type Database = {
           customer_vat_number?: string | null
           delivery_address?: string | null
           delivery_date?: string | null
+          document_schema_version?: string | null
           e_invoice_error?: string | null
           e_invoice_provider?: string | null
           e_invoice_reference?: string | null
@@ -422,12 +435,15 @@ export type Database = {
           email_artisan_status?: string
           email_client_error?: string | null
           email_client_status?: string
+          external_validation_status?: string
           facturx_profile?: string | null
           facturx_validated_at?: string | null
           facturx_validation_errors?: Json | null
           facturx_validation_status?: string
           facturx_version?: string | null
           generation_error?: string | null
+          generator_qualification_status?: string
+          generator_version?: string | null
           id?: string
           idempotency_key?: string
           invoice_date?: string
@@ -441,6 +457,7 @@ export type Database = {
           pdf_sha256?: string | null
           pdf_storage_path?: string | null
           purchase_order_reference?: string | null
+          runtime_validation_status?: string
           sent_at?: string | null
           service_period_end?: string | null
           service_period_start?: string | null
@@ -452,6 +469,7 @@ export type Database = {
           total_tva?: number
           transaction_classification?: string | null
           updated_at?: string
+          validation_artifacts_version?: string | null
           vat_on_debits?: boolean
           xml_storage_path?: string | null
         }
