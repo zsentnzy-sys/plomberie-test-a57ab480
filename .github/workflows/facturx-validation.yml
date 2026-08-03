@@ -66,7 +66,7 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Install veraPDF (checksum verified when pinned)
+      - name: Install pinned veraPDF
         run: |
           set -euo pipefail
           curl -sSL --fail "$VERAPDF_INSTALLER_URL" -o verapdf.zip
