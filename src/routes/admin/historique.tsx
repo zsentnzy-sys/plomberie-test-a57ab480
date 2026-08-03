@@ -370,19 +370,44 @@ function HistoryPage() {
                               : "PDF classique"}
                           </span>
                           {row.format === "facturx" &&
-                            (row.validationStatus === "valid" ? (
-                              <div className="text-[11px] text-muted-foreground">
-                                Prête pour plateforme agréée
-                              </div>
-                            ) : row.validationStatus === "invalid" ? (
-                              <div className="text-[11px] text-destructive">
-                                Non conforme : {row.validationSummary ?? "erreur de validation"}
-                              </div>
-                            ) : (
-                              <div className="text-[11px] text-muted-foreground">
-                                Validation en attente
-                              </div>
-                            ))}
+                            (() => {
+                              const runtime = row.runtimeValidationStatus ?? "pending";
+                              return (
+                                <div className="space-y-0.5">
+                                  <div
+                                    className={
+                                      runtime === "failed"
+                                        ? "text-[11px] text-destructive"
+                                        : "text-[11px] text-muted-foreground"
+                                    }
+                                  >
+                                    {runtime === "passed"
+                                      ? "Auto-contrôles réussis"
+                                      : runtime === "failed"
+                                        ? `Auto-contrôles en échec : ${row.validationSummary ?? "erreur interne"}`
+                                        : runtime === "not_applicable"
+                                          ? "Auto-contrôles non applicables"
+                                          : "Auto-contrôles en attente"}
+                                  </div>
+                                  <div className="text-[11px] text-muted-foreground">
+                                    {row.generatorQualificationStatus === "qualified"
+                                      ? "Moteur qualifié en CI"
+                                      : row.generatorQualificationStatus === "qualification_failed"
+                                        ? "Qualification du moteur en échec"
+                                        : "Moteur non qualifié"}
+                                  </div>
+                                  <div className="text-[11px] text-muted-foreground">
+                                    {row.externalValidationStatus === "valid"
+                                      ? "Validation externe réussie"
+                                      : row.externalValidationStatus === "invalid"
+                                        ? "Validation externe échouée"
+                                        : row.externalValidationStatus === "not_applicable"
+                                          ? "Validation externe non applicable"
+                                          : "Validation externe non exécutée"}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                         </div>
                       )}
                       {row.linkedInvoiceNumber && (
