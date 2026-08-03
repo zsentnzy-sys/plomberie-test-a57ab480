@@ -127,19 +127,23 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
       },
     );
     if (mismatches.length) {
-      await persistValidation(row.id, "invalid", mismatches.map((m) => `${m.field} : attendu ${m.expected}, obtenu ${m.actual}`));
+      await persistRuntimeValidation(
+        row.id,
+        "failed",
+        mismatches.map((m) => `${m.field} : attendu ${m.expected}, obtenu ${m.actual}`),
+      );
       throw new Error("Incohérence de montants détectée : génération interrompue.");
     }
 
     const rules = validateStructuredInvoice(structured);
     if (!rules.valid) {
-      await persistValidation(row.id, "invalid", rules.errors);
+      await persistRuntimeValidation(row.id, "failed", rules.errors);
       throw new Error(`Facture non conforme EN 16931 : ${rules.errors[0]}`);
     }
     xml = buildFacturxXml(structured);
     const syntax = validateXmlSyntax(xml);
     if (!syntax.valid) {
-      await persistValidation(row.id, "invalid", syntax.errors);
+      await persistRuntimeValidation(row.id, "failed", syntax.errors);
       throw new Error("XML Factur-X invalide : génération interrompue.");
     }
   }
@@ -175,7 +179,7 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
       });
       const structure = await assertPdfA3Structure(bytes);
       if (!structure.valid) {
-        await persistValidation(row.id, "invalid", structure.errors);
+        await persistRuntimeValidation(row.id, "failed", structure.errors);
         throw new Error(`PDF/A-3 non conforme : ${structure.errors[0]}`);
       }
     }
