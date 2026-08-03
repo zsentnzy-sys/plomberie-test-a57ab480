@@ -113,3 +113,26 @@ describe("Phase A — qualification script", () => {
     expect(script).toContain("sha256");
   });
 });
+describe("Phase A — Supabase write failures", () => {
+  const src = read("src/lib/invoices-pdf.server.ts");
+
+  it("checks the final compliance update result", () => {
+    expect(src).toContain("complianceUpdateError");
+    expect(src).toContain(
+      "la finalisation des métadonnées de la facture",
+    );
+  });
+
+  it("checks runtime validation persistence failures", () => {
+    expect(src).toContain(
+      "l’enregistrement des auto-contrôles Factur-X",
+    );
+  });
+
+  it("checks generation error persistence failures", () => {
+    expect(src).toContain("generationErrorUpdateError");
+    expect(src).toContain(
+      "l’erreur n’a pas pu être enregistrée",
+    );
+  });
+});

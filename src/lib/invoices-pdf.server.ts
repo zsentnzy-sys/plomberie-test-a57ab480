@@ -185,7 +185,22 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    await supabaseAdmin.from("invoices").update({ generation_error: msg }).eq("id", row.id);
+    const { error: generationErrorUpdateError } = await supabaseAdmin
+      .from("invoices")
+      .update({ generation_error: msg })
+      .eq("id", row.id);
+
+    if (generationErrorUpdateError) {
+      console.error("Impossible d’enregistrer l’erreur de génération du PDF", {
+        invoiceId: row.id,
+        originalGenerationError: msg,
+        databaseCode: generationErrorUpdateError.code,
+        databaseMessage: generationErrorUpdateError.message,
+      });
+      
+      throw new Error("Génération du PDF impossible et l’erreur n’a pas pu être enregistrée.");
+    }
+
     throw new Error("Génération du PDF impossible.");
   }
 
@@ -239,7 +254,19 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
       structured_invoice_snapshot: structured as unknown as Record<string, unknown>,
     });
   }
-  await supabaseAdmin.from("invoices").update(compliance as never).eq("id", row.id);
+  const { assertSupabaseWriteSucceeded } = await import(
+    "@/lib/supabase-write.server"
+  );
+  
+  const { error: complianceUpdateError } = await supabaseAdmin
+    .from("invoices")
+    .update(compliance as never)
+    .eq("id", row.id);
+  assertSupabaseWriteSucceeded(
+    complianceUpdateError,
+    "la finalisation des métadonnées de la facture",
+  );
+
   row.pdf_storage_path = path;
   return bytes;
 }
@@ -254,15 +281,28 @@ async function persistRuntimeValidation(
   status: "passed" | "failed" | "pending",
   errors: string[],
 ): Promise<void> {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  await supabaseAdmin
+  const { supabaseAdmin } = await import(
+    "@/integrations/supabase/client.server"
+  );
+  const { assertSupabaseWriteSucceeded } = await import(
+    "@/lib/supabase-write.server"
+  );
+
+  const { error } = await supabaseAdmin
     .from("invoices")
     .update({
       runtime_validation_status: status,
       generator_qualification_status: "unqualified",
       external_validation_status: "not_run",
-      facturx_validation_errors: errors.length ? (errors as never) : null,
+      facturx_validation_errors: errors.length
+        ? (errors as never)
+        : null,
       facturx_validated_at: new Date().toISOString(),
     } as never)
     .eq("id", invoiceId);
+
+  assertSupabaseWriteSucceeded(
+    error,
+    "l’enregistrement des auto-contrôles Factur-X",
+  );
 }
