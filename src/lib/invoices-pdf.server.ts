@@ -58,6 +58,16 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
     .join("");
 }
 
+/** Error raised by the Factur-X pipeline, carrying the self-check details. */
+class FacturxPipelineError extends Error {
+  readonly details: string[];
+  constructor(message: string, details: string[]) {
+    super(message);
+    this.name = "FacturxPipelineError";
+    this.details = details;
+  }
+}
+
 /** Download the stored PDF, regenerating it from persisted rows if needed. */
 export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -67,6 +77,54 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
     if (!dl.error && dl.data) return new Uint8Array(await dl.data.arrayBuffer());
   }
 
+  const isFacturxInvoice = (row.invoice_format ?? "classic_pdf") === "facturx";
+
+  // Classic PDFs keep their previous behaviour: no runtime self-check cycle.
+  if (!isFacturxInvoice) return regenerateInvoicePdf(row);
+
+  const { persistRuntimeStatus, tryPersistRuntimeFailure } = await import(
+    "@/lib/facturx/runtime-status.server"
+  );
+  const write = buildRuntimeStatusWriter(row.id);
+
+  // The insert trigger cannot cover a regeneration, so the cycle is reopened
+  // explicitly here. Only self-check columns are touched — never the send state.
+  await persistRuntimeStatus(write, "pending");
+
+  try {
+    return await regenerateInvoicePdf(row);
+  } catch (error) {
+    await tryPersistRuntimeFailure(
+      write,
+      {
+        invoiceId: row.id,
+        operation: "génération Factur-X",
+        cause: error,
+      },
+      error instanceof FacturxPipelineError ? error.details : [],
+    );
+    throw error;
+  }
+}
+
+/** Update helper restricted to the runtime self-check columns. */
+function buildRuntimeStatusWriter(
+  invoiceId: string,
+): import("@/lib/facturx/runtime-status.server").RuntimeStatusWriter {
+  return async (update) => {
+    const { supabaseAdmin } = await import(
+      "@/integrations/supabase/client.server"
+    );
+    const { error } = await supabaseAdmin
+      .from("invoices")
+      .update(update as never)
+      .eq("id", invoiceId);
+    return { error };
+  };
+}
+
+async function regenerateInvoicePdf(row: StoredInvoice): Promise<Uint8Array> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { computeTotals, artisanFromSnapshot, uploadDocumentPdf } = await import(
     "@/lib/documents.server"
   );
@@ -127,24 +185,26 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
       },
     );
     if (mismatches.length) {
-      await persistRuntimeValidation(
-        row.id,
-        "failed",
+      throw new FacturxPipelineError(
+        "Incohérence de montants détectée : génération interrompue.",
         mismatches.map((m) => `${m.field} : attendu ${m.expected}, obtenu ${m.actual}`),
       );
-      throw new Error("Incohérence de montants détectée : génération interrompue.");
     }
 
     const rules = validateStructuredInvoice(structured);
     if (!rules.valid) {
-      await persistRuntimeValidation(row.id, "failed", rules.errors);
-      throw new Error(`Facture non conforme EN 16931 : ${rules.errors[0]}`);
+      throw new FacturxPipelineError(
+        `Facture non conforme EN 16931 : ${rules.errors[0]}`,
+        rules.errors,
+      );
     }
     xml = buildFacturxXml(structured);
     const syntax = validateXmlSyntax(xml);
     if (!syntax.valid) {
-      await persistRuntimeValidation(row.id, "failed", syntax.errors);
-      throw new Error("XML Factur-X invalide : génération interrompue.");
+      throw new FacturxPipelineError(
+        "XML Factur-X invalide : génération interrompue.",
+        syntax.errors,
+      );
     }
   }
 
@@ -179,11 +239,14 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
       });
       const structure = await assertPdfA3Structure(bytes);
       if (!structure.valid) {
-        await persistRuntimeValidation(row.id, "failed", structure.errors);
-        throw new Error(`PDF/A-3 non conforme : ${structure.errors[0]}`);
+        throw new FacturxPipelineError(
+          `PDF/A-3 non conforme : ${structure.errors[0]}`,
+          structure.errors,
+        );
       }
     }
   } catch (err) {
+    if (err instanceof FacturxPipelineError) throw err;
     const msg = err instanceof Error ? err.message : String(err);
     const { error: generationErrorUpdateError } = await supabaseAdmin
       .from("invoices")
@@ -201,7 +264,7 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
       throw new Error("Génération du PDF impossible et l’erreur n’a pas pu être enregistrée.");
     }
 
-    throw new Error("Génération du PDF impossible.");
+    throw new FacturxPipelineError("Génération du PDF impossible.", [msg]);
   }
 
   const path = `invoices/${row.invoice_date.slice(0, 4)}/${row.invoice_number}.pdf`;
@@ -224,7 +287,10 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
     });
   } else {
     if (!structured || !xml) {
-      throw new Error("Données Factur-X manquantes : génération interrompue.");
+      throw new FacturxPipelineError(
+        "Données Factur-X manquantes : génération interrompue.",
+        ["structured invoice or XML missing"],
+      );
     }
     const xmlPath = `invoices/${row.invoice_date.slice(0, 4)}/`+`${row.invoice_number}-factur-x.xml`;
     const xmlUpload = await supabaseAdmin.storage
@@ -234,7 +300,10 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
         upsert: true,
       },);
     if (xmlUpload.error) {
-      throw new Error("Écriture du XML Factur-X impossible : génération interrompue.");
+      throw new FacturxPipelineError(
+        "Écriture du XML Factur-X impossible : génération interrompue.",
+        [xmlUpload.error.message ?? "upload XML échoué"],
+      );
     }
     const { buildInvoiceComplianceMetadata } = await import(
       "@/lib/facturx/facturx-persistence.server");
@@ -260,6 +329,12 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
     .from("invoices")
     .update(compliance as never)
     .eq("id", row.id);
+  if (complianceUpdateError && isFacturx) {
+    throw new FacturxPipelineError(
+      "Échec de la finalisation des métadonnées de la facture.",
+      [complianceUpdateError.message ?? "écriture des métadonnées échouée"],
+    );
+  }
   assertSupabaseWriteSucceeded(
     complianceUpdateError,
     "la finalisation des métadonnées de la facture",
@@ -267,40 +342,4 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
 
   row.pdf_storage_path = path;
   return bytes;
-}
-
-/**
- * Persists the result of the INTERNAL self-checks only. It never touches the
- * generator qualification nor the external validation status: neither can be
- * earned at runtime.
- */
-async function persistRuntimeValidation(
-  invoiceId: string,
-  status: "passed" | "failed" | "pending",
-  errors: string[],
-): Promise<void> {
-  const { supabaseAdmin } = await import(
-    "@/integrations/supabase/client.server"
-  );
-  const { assertSupabaseWriteSucceeded } = await import(
-    "@/lib/supabase-write.server"
-  );
-
-  const { error } = await supabaseAdmin
-    .from("invoices")
-    .update({
-      runtime_validation_status: status,
-      generator_qualification_status: "unqualified",
-      external_validation_status: "not_run",
-      facturx_validation_errors: errors.length
-        ? (errors as never)
-        : null,
-      facturx_validated_at: new Date().toISOString(),
-    } as never)
-    .eq("id", invoiceId);
-
-  assertSupabaseWriteSucceeded(
-    error,
-    "l’enregistrement des auto-contrôles Factur-X",
-  );
 }

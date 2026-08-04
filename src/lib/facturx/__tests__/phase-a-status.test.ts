@@ -31,27 +31,10 @@ describe("Phase A — versions", () => {
   });
 });
 
-describe("Phase A — qualification script", () => {
-  const script = read("scripts/validate-facturx.ts");
+// Le comportement du script de qualification (outils manquants, rapport VeraPDF,
+// cohérence XML, résumé non trompeur) est couvert par des tests comportementaux
+// dans scripts/lib/qualification-core.test.ts.
 
-  it("treats a missing tool as a failure, not a warning", () => {
-    expect(script).not.toContain("validation externe ignorée");
-    expect(script).toContain("est obligatoire");
-    expect(script).toContain("process.exit(1)");
-  });
-
-  it("never announces a successful Factur-X qualification", () => {
-    expect(script).not.toContain("Qualification Factur-X réussie");
-    expect(script).toContain("Vérifications Phase A réussies");
-    expect(script).toContain("Generator qualification: UNQUALIFIED");
-  });
-
-  it("checks the embedded XML against the generated one", () => {
-    expect(script).toContain("Embedded XML extraction");
-    expect(script).toContain("Embedded XML consistency");
-    expect(script).toContain("sha256");
-  });
-});
 describe("Phase A — Supabase write failures", () => {
   const src = read("src/lib/invoices-pdf.server.ts");
 
@@ -59,12 +42,6 @@ describe("Phase A — Supabase write failures", () => {
     expect(src).toContain("complianceUpdateError");
     expect(src).toContain(
       "la finalisation des métadonnées de la facture",
-    );
-  });
-
-  it("checks runtime validation persistence failures", () => {
-    expect(src).toContain(
-      "l’enregistrement des auto-contrôles Factur-X",
     );
   });
 
