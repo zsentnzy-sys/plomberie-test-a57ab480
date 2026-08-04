@@ -12,7 +12,7 @@
  * Schematron are not integrated yet (Phase B).
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -156,9 +156,7 @@ writeFileSync(pdfPath, hybrid);
 writeFileSync(xmlPath, generatedXmlBytes);
 const referencePdfExists = existsSync(pdfPath);
 const externalXml = existsSync(xmlPath)
-  ? new Uint8Array(
-      (await import("node:fs")).readFileSync(xmlPath) as unknown as ArrayBufferLike,
-    )
+  ? new Uint8Array(readFileSync(xmlPath))
   : undefined;
 
 // --- Embedded XML extraction ---------------------------------------------
