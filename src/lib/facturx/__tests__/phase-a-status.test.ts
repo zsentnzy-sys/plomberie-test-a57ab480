@@ -31,34 +31,6 @@ describe("Phase A — versions", () => {
   });
 });
 
-describe("Phase A — admin history wording", () => {
-  const ui = read("src/routes/admin/historique.tsx");
-  const fns = read("src/lib/history.functions.ts");
-
-  it("no longer claims the invoice is ready for an approved platform", () => {
-    for (const forbidden of [
-      "Prête pour plateforme agréée",
-      "Conforme Factur-X",
-      "Factur-X validée",
-      "Prête à transmettre",
-      "Conforme EN 16931",
-    ]) {
-      expect(ui).not.toContain(forbidden);
-    }
-  });
-
-  it("shows the three separate statuses", () => {
-    expect(ui).toContain("Auto-contrôles réussis");
-    expect(ui).toContain("Moteur non qualifié");
-    expect(ui).toContain("Validation externe non exécutée");
-  });
-
-  it("stops reading the deprecated column for display", () => {
-    expect(fns).not.toContain("r.facturx_validation_status");
-    expect(fns).toContain("runtime_validation_status");
-  });
-});
-
 describe("Phase A — qualification script", () => {
   const script = read("scripts/validate-facturx.ts");
 

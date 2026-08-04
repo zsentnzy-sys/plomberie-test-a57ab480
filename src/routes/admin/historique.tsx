@@ -50,6 +50,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+import { buildFacturxHistoryStatus } from "@/lib/facturx/history-status";
+
 export const Route = createFileRoute("/admin/historique")({
   component: HistoryPage,
   errorComponent: ({ error }) => (
@@ -371,41 +373,44 @@ function HistoryPage() {
                           </span>
                           {row.format === "facturx" &&
                             (() => {
-                              const runtime = row.runtimeValidationStatus ?? "pending";
+                              const validationStatus = buildFacturxHistoryStatus({
+                                runtimeValidationStatus:
+                                  row.runtimeValidationStatus,
+                                generatorQualificationStatus:
+                                  row.generatorQualificationStatus,
+                                externalValidationStatus:
+                                  row.externalValidationStatus,
+                                validationSummary: row.validationSummary,
+                              });
                               return (
                                 <div className="space-y-0.5">
                                   <div
                                     className={
-                                      runtime === "failed"
+                                      validationStatus.runtime.tone === "error"
                                         ? "text-[11px] text-destructive"
                                         : "text-[11px] text-muted-foreground"
                                     }
                                   >
-                                    {runtime === "passed"
-                                      ? "Auto-contrôles réussis"
-                                      : runtime === "failed"
-                                        ? `Auto-contrôles en échec : ${row.validationSummary ?? "erreur interne"}`
-                                        : runtime === "not_applicable"
-                                          ? "Auto-contrôles non applicables"
-                                          : "Auto-contrôles en attente"}
+                                    {validationStatus.runtime.label}
                                   </div>
-                                  <div className="text-[11px] text-muted-foreground">
-                                    {row.generatorQualificationStatus === "qualified"
-                                      ? "Moteur qualifié en CI"
-                                      : row.generatorQualificationStatus === "qualification_failed"
-                                        ? "Qualification du moteur en échec"
-                                        : "Moteur non qualifié"}
+
+                                  <div className={
+                                    validationStatus.generator.tone === "error"
+                                      ? "text-[11px] text-destructive"
+                                      : "text-[11px] text-muted-foreground"
+                                  }>
+                                    {validationStatus.generator.label}
                                   </div>
-                                  <div className="text-[11px] text-muted-foreground">
-                                    {row.externalValidationStatus === "valid"
-                                      ? "Validation externe réussie"
-                                      : row.externalValidationStatus === "invalid"
-                                        ? "Validation externe échouée"
-                                        : row.externalValidationStatus === "not_applicable"
-                                          ? "Validation externe non applicable"
-                                          : "Validation externe non exécutée"}
+
+                                  <div className={
+                                    validationStatus.external.tone === "error"
+                                      ? "text-[11px] text-destructive"
+                                      : "text-[11px] text-muted-foreground"
+                                  }
+                                  >
+                                    {validationStatus.external.label}
                                   </div>
-                                </div>
+                              </div>
                               );
                             })()}
                         </div>
