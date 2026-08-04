@@ -108,8 +108,10 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
 }
 
 /** Update helper restricted to the runtime self-check columns. */
-function buildRuntimeStatusWriter(invoiceId: string) {
-  return async (update: Record<string, unknown>) => {
+function buildRuntimeStatusWriter(
+  invoiceId: string,
+): import("@/lib/facturx/runtime-status.server").RuntimeStatusWriter {
+  return async (update) => {
     const { supabaseAdmin } = await import(
       "@/integrations/supabase/client.server"
     );
