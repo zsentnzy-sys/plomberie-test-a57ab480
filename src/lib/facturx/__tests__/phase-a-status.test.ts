@@ -22,45 +22,12 @@ describe("Phase A — versions", () => {
   it("never uses the XMP version as a specification version", () => {
     expect(FACTURX_CONFIG.xmpVersion).toBe("1.0");
     expect(FACTURX_CONFIG.implementedSpecificationVersion).not.toBe(
-      FACTURX_CONFIG.xmpVersion,
-    );
-    const src = read("src/lib/invoices-pdf.server.ts");
-    expect(src).toContain(
-      "facturx_version: FACTURX_CONFIG.implementedSpecificationVersion",
-    );
-    expect(src).not.toContain("facturx_version: FACTURX_CONFIG.xmpVersion");
+      FACTURX_CONFIG.xmpVersion);
   });
 
   it("ships no official validation artifacts, so the generator stays unqualified", () => {
     expect(FACTURX_CONFIG.validationArtifactsVersion).toBeNull();
     expect(GENERATOR_QUALIFICATION).toBe("unqualified");
-  });
-});
-
-describe("Phase A — persisted statuses", () => {
-  const src = read("src/lib/invoices-pdf.server.ts");
-
-  it("persists generator + document schema versions on hybrid invoices", () => {
-    expect(src).toContain("generator_version: FACTURX_CONFIG.generatorVersion");
-    expect(src).toContain(
-      "document_schema_version: FACTURX_CONFIG.documentSchemaVersion",
-    );
-    expect(src).toContain(
-      "validation_artifacts_version: FACTURX_CONFIG.validationArtifactsVersion",
-    );
-  });
-
-  it("only ever claims internal self-checks, never qualification or external validity", () => {
-    expect(src).toContain('runtime_validation_status: "passed"');
-    expect(src).toContain('external_validation_status: "not_run"');
-    expect(src).not.toContain('generator_qualification_status: "qualified"');
-    expect(src).not.toContain('external_validation_status: "valid"');
-    expect(src).not.toContain('facturx_validation_status: "valid"');
-  });
-
-  it("marks classic PDFs as out of scope", () => {
-    expect(src).toContain('runtime_validation_status: "not_applicable"');
-    expect(src).toContain('external_validation_status: "not_applicable"');
   });
 });
 

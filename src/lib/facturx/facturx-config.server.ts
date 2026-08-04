@@ -30,9 +30,9 @@ export const FACTURX_CONFIG = {
   /** UNTDID 1001 — commercial invoice. */
   invoiceTypeCode: "380",
   /** Identifies the exact generator build that produced a document. */
-  generatorVersion: "normalweb-facturx-1",
+  generatorVersion: "1.0.0",
   /** Internal shape of the structured invoice snapshot. */
-  documentSchemaVersion: "facturx-legacy-1",
+  documentSchemaVersion: "1.0",
   /**
    * Version of the OFFICIAL validation artifacts (XSD/Schematron) bundled with
    * the generator. null = none bundled, so no qualification is possible.
