@@ -183,7 +183,7 @@ async function regenerateInvoicePdf(row: StoredInvoice): Promise<Uint8Array> {
     const rules = validateStructuredInvoice(structured);
     if (!rules.valid) {
       throw new FacturxPipelineError(
-        `Facture non conforme EN 16931 : ${rules.errors[0]}`,
+        "Échec des contrôles métier internes de la facture.",
         rules.errors,
       );
     }

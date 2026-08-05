@@ -52,3 +52,20 @@ describe("Phase A — Supabase write failures", () => {
     );
   });
 });
+
+describe("libellés internes du pipeline", () => {
+  it("ne présente pas les contrôles internes comme une validation EN 16931", () => {
+    const source = readFileSync(
+      "src/lib/invoices-pdf.server.ts",
+      "utf8",
+    );
+
+    expect(source).not.toContain(
+      "Facture non conforme EN 16931",
+    );
+
+    expect(source).toContain(
+      "Échec des contrôles métier internes de la facture.",
+    );
+  });
+});
