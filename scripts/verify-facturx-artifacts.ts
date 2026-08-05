@@ -9,7 +9,8 @@ import type {
 } from "../src/lib/facturx/validation/artifact-manifest";
 
 const manifestPath = resolve(
-  "src/lib/facturx/validation/1.09/manifest.json",
+    process.env.FACTURX_ARTIFACT_MANIFEST_PATH ?? 
+        "src/lib/facturx/validation/1.09/manifest.json",
 );
 
 let manifest: FacturxValidationArtifactManifest;

@@ -58,6 +58,12 @@ jobs:
       - name: Unit tests
         run: bun run test:unit
 
+      - name: Verify Factur-X artifacts
+        run: |
+          set -o pipefail
+          bun run verify:facturx-artifacts \
+            | tee facturx-artifacts-report.text
+
       - name: Build
         run: bun run build
 
@@ -113,5 +119,6 @@ jobs:
           name: facturx-phase-a-report
           path: |
             facturx-report.txt
+            facturx-artifacts-report.txt
             /tmp/facturx-qualification/**
           if-no-files-found: warn
