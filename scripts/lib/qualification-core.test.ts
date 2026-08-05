@@ -83,6 +83,25 @@ describe("evaluateQualification — échecs d'outils", () => {
     expect(stepOf(result, "Java availability")?.status).toBe("FAIL");
   });
 
+  it("échoue quand Java retourne un code non nul", () => {
+    const result = evaluateQualification(
+      inputs({
+        java: {
+          ...availableTool,
+          exitCode: 1,
+          stderr: "Java runtime failure",
+        },
+      }),
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.exitCode).toBe(1);
+    expect(stepOf(result, "Java availability")?.status).toBe("FAIL");
+    expect(stepOf(result, "Java availability")?.detail).toContain(
+      "code 1",
+    );
+  });
+
   it("échoue quand la facture de référence est absente", () => {
     const result = evaluateQualification(inputs({ referencePdfExists: false }));
     expect(result.success).toBe(false);

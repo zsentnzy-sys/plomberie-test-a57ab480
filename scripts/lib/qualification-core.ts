@@ -89,6 +89,15 @@ function toolStep(
         `${name} : l'outil est obligatoire et n'est pas installé.`,
     };
   }
+
+  if (tool.exitCode !== 0) {
+    return {
+      name,
+      status: "FAIL",
+      detail: `${name} a terminé avec le code ${tool.exitCode}.`,
+    };
+  }
+
   return { name, status: "PASS" };
 }
 
