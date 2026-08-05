@@ -1,0 +1,12 @@
+{
+  "manifestVersion": 1,
+  "facturxVersion": "1.09",
+  "zugferdVersion": "2.5",
+  "syntax": "UN/CEFACT CII D22B",
+  "profile": "EN16931",
+  "publisher": "FNFE-MPE / FeRD",
+  "releaseDate": "2026-06-10",
+  "source": "Official Factur-X 1.09 / ZUGFeRD 2.5 information package",
+  "installed": false,
+  "artifacts": []
+}
