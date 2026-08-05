@@ -16,7 +16,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "validate:facturx": "bun run scripts/validate-facturx.ts",
-    "verify": "bun run typecheck && bun run lint && bun run test:unit && bun run build"
+    "verify": "bun run typecheck && bun run lint && bun run test:unit && bun run build",
+    "verify:facturx-artifacts": "bun run scripts/verify-facturx-artifacts.ts"
   },
   "dependencies": {
     "@cantoo/pdf-lib": "^2.7.4",
