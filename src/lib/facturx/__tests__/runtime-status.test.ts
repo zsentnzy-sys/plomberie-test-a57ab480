@@ -4,6 +4,8 @@ import {
   buildRuntimeStatusUpdate,
   persistRuntimeStatus,
   tryPersistRuntimeFailure,
+  buildFacturxGenerationUserError,
+  FACTURX_GENERATION_USER_MESSAGE,
   SEND_STATE_COLUMNS,
   RUNTIME_STATUS_COLUMNS,
   type RuntimeStatusUpdate,
@@ -174,5 +176,26 @@ describe("cycle complet", () => {
       "pending",
       "failed",
     ]);
+  });
+});
+
+describe("erreur utilisateur Factur-X", () => {
+  it("retourne un message générique", () => {
+    const error = buildFacturxGenerationUserError();
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toBe(
+      FACTURX_GENERATION_USER_MESSAGE,
+    );
+  });
+
+  it("n'expose aucun détail technique", () => {
+    const error = buildFacturxGenerationUserError();
+
+    expect(error.message).not.toContain("Supabase");
+    expect(error.message).not.toContain("Storage");
+    expect(error.message).not.toContain("PDF/A-3");
+    expect(error.message).not.toContain("XML");
+    expect(error.message).not.toContain("permission denied");
   });
 });

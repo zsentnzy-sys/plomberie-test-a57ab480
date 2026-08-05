@@ -28,6 +28,11 @@ export const SEND_STATE_COLUMNS = [
   "email_artisan_error",
 ] as const;
 
+export const FACTURX_GENERATION_USER_MESSAGE = "La génération de la facture Factur-X a échoué.";
+export function buildFacturxGenerationUserError(): Error {
+  return new Error(FACTURX_GENERATION_USER_MESSAGE);
+}
+
 export interface RuntimeStatusUpdate {
   runtime_validation_status: RuntimeSelfCheckStatus;
   generator_qualification_status: "unqualified";

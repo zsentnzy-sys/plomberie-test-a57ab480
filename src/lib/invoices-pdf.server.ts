@@ -82,7 +82,7 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
   // Classic PDFs keep their previous behaviour: no runtime self-check cycle.
   if (!isFacturxInvoice) return regenerateInvoicePdf(row);
 
-  const { persistRuntimeStatus, tryPersistRuntimeFailure } = await import(
+  const { persistRuntimeStatus, tryPersistRuntimeFailure, buildFacturxGenerationUserError } = await import(
     "@/lib/facturx/runtime-status.server"
   );
   const write = buildRuntimeStatusWriter(row.id);
@@ -103,7 +103,7 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
       },
       error instanceof FacturxPipelineError ? error.details : [],
     );
-    throw error;
+    throw buildFacturxGenerationUserError();
   }
 }
 
