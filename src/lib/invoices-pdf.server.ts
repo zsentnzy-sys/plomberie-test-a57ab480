@@ -82,29 +82,18 @@ export async function ensureInvoicePdf(row: StoredInvoice): Promise<Uint8Array> 
   // Classic PDFs keep their previous behaviour: no runtime self-check cycle.
   if (!isFacturxInvoice) return regenerateInvoicePdf(row);
 
-  const { persistRuntimeStatus, tryPersistRuntimeFailure, buildFacturxGenerationUserError } = await import(
+  const { runFacturxRuntimeCycle } = await import(
     "@/lib/facturx/runtime-status.server"
   );
   const write = buildRuntimeStatusWriter(row.id);
 
-  // The insert trigger cannot cover a regeneration, so the cycle is reopened
-  // explicitly here. Only self-check columns are touched — never the send state.
-  await persistRuntimeStatus(write, "pending");
-
-  try {
-    return await regenerateInvoicePdf(row);
-  } catch (error) {
-    await tryPersistRuntimeFailure(
-      write,
-      {
-        invoiceId: row.id,
-        operation: "génération Factur-X",
-        cause: error,
-      },
+  return runFacturxRuntimeCycle({
+    write,
+    context: { invoiceId: row.id, operation: "génération Factur-X" },
+    execute: () => regenerateInvoicePdf(row),
+    getFailureDetails: (error) =>
       error instanceof FacturxPipelineError ? error.details : [],
-    );
-    throw buildFacturxGenerationUserError();
-  }
+  });
 }
 
 /** Update helper restricted to the runtime self-check columns. */

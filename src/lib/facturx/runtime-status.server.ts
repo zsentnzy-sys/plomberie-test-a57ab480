@@ -46,6 +46,18 @@ export type RuntimeStatusWriter = (
   update: RuntimeStatusUpdate,
 ) => Promise<{ error: { message?: string; code?: string } | null }>;
 
+export interface FacturxRuntimeCycleContext {
+  invoiceId: string;
+  operation: string;
+}
+
+export interface FacturxRuntimeCycleOptions<T> {
+  write: RuntimeStatusWriter;
+  context: FacturxRuntimeCycleContext;
+  execute: () => Promise<T>;
+  getFailureDetails?: (error: unknown) => string[];
+}
+
 export function buildRuntimeStatusUpdate(
   status: RuntimeSelfCheckStatus,
   errors: string[] = [],
@@ -136,5 +148,44 @@ export async function tryPersistRuntimeFailure(
           : String(persistenceError),
     });
     return { persisted: false };
+  }
+}
+
+/**
+ * Runs the runtime self-check lifecycle around a real Factur-X operation.
+ *
+ * Lifecycle:
+ * pending -> operation -> result
+ * pending -> operation failure -> failed -> generic user error
+ *
+ * The original error is kept for server logs and persisted details but is
+ * never returned directly to the client.
+ */
+export async function runFacturxRuntimeCycle<T>(
+  options: FacturxRuntimeCycleOptions<T>,
+): Promise<T> {
+  const {
+    write,
+    context,
+    execute,
+    getFailureDetails = () => [],
+  } = options;
+
+  await persistRuntimeStatus(write, "pending");
+
+  try {
+    return await execute();
+  } catch (error) {
+    await tryPersistRuntimeFailure(
+      write,
+      {
+        invoiceId: context.invoiceId,
+        operation: context.operation,
+        cause: error,
+      },
+      getFailureDetails(error),
+    );
+
+    throw buildFacturxGenerationUserError();
   }
 }

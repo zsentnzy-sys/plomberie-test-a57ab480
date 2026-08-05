@@ -4,6 +4,7 @@ import {
   buildRuntimeStatusUpdate,
   persistRuntimeStatus,
   tryPersistRuntimeFailure,
+  runFacturxRuntimeCycle,
   buildFacturxGenerationUserError,
   FACTURX_GENERATION_USER_MESSAGE,
   SEND_STATE_COLUMNS,
@@ -197,5 +198,173 @@ describe("erreur utilisateur Factur-X", () => {
     expect(error.message).not.toContain("PDF/A-3");
     expect(error.message).not.toContain("XML");
     expect(error.message).not.toContain("permission denied");
+  });
+});
+
+describe("runFacturxRuntimeCycle", () => {
+  it("ouvre le cycle en pending puis retourne le résultat", async () => {
+    const writes: RuntimeStatusUpdate[] = [];
+
+    const result = await runFacturxRuntimeCycle({
+      write: async (update) => {
+        writes.push(update);
+        return { error: null };
+      },
+      context: {
+        invoiceId: "inv-success",
+        operation: "génération Factur-X",
+      },
+      execute: async () => new Uint8Array([1, 2, 3]),
+    });
+
+    expect(result).toEqual(new Uint8Array([1, 2, 3]));
+
+    expect(
+      writes.map(
+        (update) =>
+          update.runtime_validation_status,
+      ),
+    ).toEqual(["pending"]);
+  });
+
+  it("persiste failed quand l'upload XML échoue", async () => {
+    const writes: RuntimeStatusUpdate[] = [];
+
+    await expect(
+      runFacturxRuntimeCycle({
+        write: async (update) => {
+          writes.push(update);
+          return { error: null };
+        },
+        context: {
+          invoiceId: "inv-xml-upload",
+          operation: "génération Factur-X",
+        },
+        execute: async () => {
+          throw new Error("upload XML échoué");
+        },
+        getFailureDetails: () => [
+          "Storage XML indisponible",
+        ],
+      }),
+    ).rejects.toThrow(
+      FACTURX_GENERATION_USER_MESSAGE,
+    );
+
+    expect(
+      writes.map(
+        (update) =>
+          update.runtime_validation_status,
+      ),
+    ).toEqual(["pending", "failed"]);
+
+    expect(
+      writes[1].facturx_validation_errors,
+    ).toEqual(["Storage XML indisponible"]);
+  });
+
+  it("persiste failed quand la finalisation Supabase échoue", async () => {
+    const writes: RuntimeStatusUpdate[] = [];
+
+    await expect(
+      runFacturxRuntimeCycle({
+        write: async (update) => {
+          writes.push(update);
+          return { error: null };
+        },
+        context: {
+          invoiceId: "inv-finalization",
+          operation: "génération Factur-X",
+        },
+        execute: async () => {
+          throw new Error(
+            "écriture des métadonnées échouée",
+          );
+        },
+        getFailureDetails: (error) => [
+          error instanceof Error
+            ? error.message
+            : String(error),
+        ],
+      }),
+    ).rejects.toThrow(
+      FACTURX_GENERATION_USER_MESSAGE,
+    );
+
+    expect(
+      writes.map(
+        (update) =>
+          update.runtime_validation_status,
+      ),
+    ).toEqual(["pending", "failed"]);
+
+    expect(
+      writes[1].facturx_validation_errors,
+    ).toEqual([
+      "écriture des métadonnées échouée",
+    ]);
+  });
+
+  it("conserve le message générique si la persistance de failed échoue", async () => {
+    let writeCount = 0;
+
+    await expect(
+      runFacturxRuntimeCycle({
+        write: async () => {
+          writeCount += 1;
+
+          if (writeCount === 1) {
+            return { error: null };
+          }
+
+          return {
+            error: {
+              message: "database unavailable",
+              code: "08006",
+            },
+          };
+        },
+        context: {
+          invoiceId: "inv-double-failure",
+          operation: "génération Factur-X",
+        },
+        execute: async () => {
+          throw new Error(
+            "PDF/A-3 generation failure",
+          );
+        },
+      }),
+    ).rejects.toThrow(
+      FACTURX_GENERATION_USER_MESSAGE,
+    );
+
+    expect(writeCount).toBe(2);
+  });
+
+  it("ne démarre pas l'opération si pending ne peut pas être persisté", async () => {
+    let executed = false;
+
+    await expect(
+      runFacturxRuntimeCycle({
+        write: async () => ({
+          error: {
+            message: "permission denied",
+            code: "42501",
+          },
+        }),
+        context: {
+          invoiceId: "inv-pending-failure",
+          operation: "génération Factur-X",
+        },
+        execute: async () => {
+          executed = true;
+          return new Uint8Array();
+        },
+      }),
+    ).rejects.toThrow(
+      "l’enregistrement des auto-contrôles Factur-X",
+    );
+
+    expect(executed).toBe(false);
   });
 });
