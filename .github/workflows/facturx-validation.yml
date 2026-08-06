@@ -52,6 +52,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install XML validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils
+          xmllint --version
+
       - name: Typecheck
         run: bun run typecheck
 
@@ -63,6 +69,24 @@ jobs:
           set -o pipefail
           bun run verify:facturx-artifacts \
             | tee facturx-artifacts-report.text
+      - name: Verify Official EN16931 XSD rejects invalid XML
+        run: | 
+          set +e
+          bun run validate:facturx-xsd \
+            src/lib/facturx/validation-artifacts/invalid-invoice.xml \
+            > facturx-xsd-negative-report.txt 2>&1
+          status=$?
+          set -e
+          cat facturx-xsd-negative-report.txt
+          if [ $status -eq 0 ]; then
+            echo "::error::Le XSD officiel a accepté une fixture volontairement invalide."
+            exit 1
+          fi
+          if ! grep "XSD validation: FAIL" \
+            facturx-xsd-negative-report.txt; then
+            echo "::error::La validation XSD n'a pas produit l'échec attendu."
+            exit 1
+          fi
 
       - name: Build
         run: bun run build
@@ -120,5 +144,6 @@ jobs:
           path: |
             facturx-report.txt
             facturx-artifacts-report.txt
+            facturx-xsd-negative-report.txt
             /tmp/facturx-qualification/**
           if-no-files-found: warn

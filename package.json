@@ -18,6 +18,7 @@
     "inventory:facturx-package": "bun run scripts/inventory-facturx-package.ts",
     "generate:facturx-artifact-manifest": "bun scripts/generate-facturx-artifact-manifest.ts",
     "validate:facturx": "bun run scripts/validate-facturx.ts",
+    "validate:facturx-xsd": "bun scripts/validate-facturx-xsd.ts",
     "verify": "bun run typecheck && bun run lint && bun run test:unit && bun run build",
     "verify:facturx-artifacts": "bun run scripts/verify-facturx-artifacts.ts"
   },
