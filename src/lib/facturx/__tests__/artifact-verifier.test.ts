@@ -44,12 +44,14 @@ function manifest(
 ): FacturxValidationArtifactManifest {
   return {
     manifestVersion: 1,
-    facturxVersion: "1.09",
-    zugferdVersion: "2.5",
+    facturxVersion: "1.09.2",
+    zugferdVersion: "2.5.2",
     syntax: "UN/CEFACT CII D22B",
     profile: "EN16931",
     publisher: "FNFE-MPE / FeRD",
-    releaseDate: "2026-06-10",
+    releaseDate: "2026-08-04",
+    packageFileName: "Factur-X-1.09.2-Zugferd-2.5.2-2026-08-04-FINAL-FR.zip",
+    packageSha256: "7d2fe79580270c8babea3e40dbdae47bd68c0baa7022051be4f955921a1cd29a",
     source: "Official package",
     installed: false,
     artifacts: [],

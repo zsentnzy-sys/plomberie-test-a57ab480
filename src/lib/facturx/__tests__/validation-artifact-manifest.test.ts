@@ -20,19 +20,21 @@ describe("Factur-X 1.09 validation artifact manifest", () => {
   it("declares the expected versions and syntax", () => {
     const manifest = readManifest();
 
-    expect(manifest.facturxVersion).toBe("1.09");
-    expect(manifest.zugferdVersion).toBe("2.5");
+    expect(manifest.facturxVersion).toBe("1.09.2");
+    expect(manifest.zugferdVersion).toBe("2.5.2");
     expect(manifest.syntax).toBe(
       "UN/CEFACT CII D22B",
     );
     expect(manifest.profile).toBe("EN16931");
+    
   });
 
-  it("remains explicitly uninstalled while artifacts are absent", () => {
+  it("declares the installed official EN16931 artifact set", () => {
     const manifest = readManifest();
 
-    expect(manifest.installed).toBe(false);
-    expect(manifest.artifacts).toEqual([]);
+    expect(manifest.installed).toBe(true);
+    expect(manifest.artifacts).toHaveLength(8);
+    expect(manifest.artifacts.every((artifact) => artifact.profiles.includes("EN16931"))).toBe(true);
   });
 
   it("is structurally valid", () => {
@@ -84,5 +86,12 @@ describe("Factur-X 1.09 validation artifact manifest", () => {
     expect(errors).toContain(
       "Missing profile for artifact: ../external/file.xsd",
     );
+  });
+
+  it("pins the exact official release package", () => {
+    const manifest = readManifest();
+
+    expect(manifest.packageFileName).toBe("Factur-X-1.09.2-Zugferd-2.5.2-2026-08-04-FINAL-FR.zip");
+    expect(manifest.packageSha256).toBe("7d2fe79580270c8babea3e40dbdae47bd68c0baa7022051be4f955921a1cd29a");
   });
 });

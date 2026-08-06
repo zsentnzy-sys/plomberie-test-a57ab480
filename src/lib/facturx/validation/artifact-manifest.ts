@@ -42,6 +42,8 @@ export interface FacturxValidationArtifactManifest {
 
   publisher: string;
   releaseDate: string;
+  packageFileName: string;
+  packageSha256: string;
 
   /**
    * Human-readable source reference.
@@ -68,11 +70,11 @@ export function validateArtifactManifest(
     errors.push("Unsupported manifest version.");
   }
 
-  if (manifest.facturxVersion !== "1.09") {
-    errors.push("Unexpected Factur-X version.");
+  if (manifest.facturxVersion !== "1.09.2") {
+  errors.push("Unexpected Factur-X version.");
   }
 
-  if (manifest.zugferdVersion !== "2.5") {
+  if (manifest.zugferdVersion !== "2.5.2") {
     errors.push("Unexpected ZUGFeRD version.");
   }
 
@@ -88,6 +90,13 @@ export function validateArtifactManifest(
     errors.push(
       "An installed manifest must contain validation artifacts.",
     );
+  if (!manifest.packageFileName.trim()) {
+    errors.push("Missing official package file name.");
+  }
+
+  if (!SHA256_PATTERN.test(manifest.packageSha256)) {
+    errors.push("Invalid oofficial package SHA-256.");
+  }
   }
 
   const paths = new Set<string>();

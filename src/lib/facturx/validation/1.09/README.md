@@ -5,7 +5,19 @@ Factur-X 1.09 / ZUGFeRD 2.5 publié le 10 juin 2026.
 
 ## État actuel
 
-Les artefacts ne sont pas encore installés.
+Les artefacts officiels du profil EN16931 issus du package
+Factur-X 1.09.2 / ZUGFeRD 2.5.2 FINAL FR sont installés et
+verrouillés par SHA-256.
+
+L’installation des artefacts ne signifie pas encore que :
+
+- le générateur produit du CII D22B conforme ;
+- les validations XSD sont exécutées ;
+- les règles Schematron sont exécutées ;
+- le générateur est qualifié.
+
+Le générateur reste `unqualified` jusqu’à ce que les validations
+soient réellement intégrées et que le corpus de qualification passe.
 
 Le fichier `manifest.json` doit conserver :
 

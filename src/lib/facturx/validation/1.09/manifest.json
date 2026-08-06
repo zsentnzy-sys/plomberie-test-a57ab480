@@ -1,12 +1,79 @@
 {
   "manifestVersion": 1,
-  "facturxVersion": "1.09",
-  "zugferdVersion": "2.5",
+  "facturxVersion": "1.09.2",
+  "zugferdVersion": "2.5.2",
   "syntax": "UN/CEFACT CII D22B",
   "profile": "EN16931",
   "publisher": "FNFE-MPE / FeRD",
-  "releaseDate": "2026-06-10",
-  "source": "Official Factur-X 1.09 / ZUGFeRD 2.5 information package",
-  "installed": false,
-  "artifacts": []
+  "releaseDate": "2026-08-04",
+  "source": "Official Factur-X 1.09.2 / ZUGFeRD 2.5.2 FINAL FR package",
+  "packageFileName": "Factur-X-1.09.2-Zugferd-2.5.2-2026-08-04-FINAL-FR.zip",
+  "packageSha256": "7d2fe79580270c8babea3e40dbdae47bd68c0baa7022051be4f955921a1cd29a",
+  "installed": true,
+  "artifacts": [
+    {
+      "path": "artifacts/en16931/FACTUR-X_EN16931.sch",
+      "kind": "schematron",
+      "sha256": "ef8c8380b499d1267b2dcf1fa709b45631a77d6d5f220c6cc2ade2fdade59473",
+      "profiles": [
+        "EN16931"
+      ]
+    },
+    {
+      "path": "artifacts/en16931/FACTUR-X_EN16931_codedb.xml",
+      "kind": "code-list",
+      "sha256": "70339a41d71b02bb97683f8eea04acbd764e077a88a446b32860d89c3351b62f",
+      "profiles": [
+        "EN16931"
+      ]
+    },
+    {
+      "path": "artifacts/en16931/Factur-X_1.09.2_EN16931.xsd",
+      "kind": "xsd",
+      "sha256": "cb98b34e59398fcd8d48f29963a3fd6f4c49af9a8307569f4a1ced634f1aa885",
+      "profiles": [
+        "EN16931"
+      ]
+    },
+    {
+      "path": "artifacts/en16931/Factur-X_1.09.2_EN16931_urn_un_unece_uncefact_data_standard_QualifiedDataType_100.xsd",
+      "kind": "xsd",
+      "sha256": "4bd1753b1f078ecc50468ec90e505a63a72c6c1f2449a893f37c72a2e933fe04",
+      "profiles": [
+        "EN16931"
+      ]
+    },
+    {
+      "path": "artifacts/en16931/Factur-X_1.09.2_EN16931_urn_un_unece_uncefact_data_standard_ReusableAggregateBusinessInformationEntity_100.xsd",
+      "kind": "xsd",
+      "sha256": "d6bf8e38c3d5595c670655ccb7ee89655ae244943aaf09a31758160caabc7894",
+      "profiles": [
+        "EN16931"
+      ]
+    },
+    {
+      "path": "artifacts/en16931/Factur-X_1.09.2_EN16931_urn_un_unece_uncefact_data_standard_UnqualifiedDataType_100.xsd",
+      "kind": "xsd",
+      "sha256": "60ee4d11da40c7ec42a4da1fb77b5d7bbffcdce42afd863fcd9da9334765315c",
+      "profiles": [
+        "EN16931"
+      ]
+    },
+    {
+      "path": "artifacts/en16931/xslt/FACTUR-X_EN16931.xslt",
+      "kind": "xslt",
+      "sha256": "67f03050e3add4c83dc93de36e4501f6a11aae1ac790b3f9558feb0581019bcb",
+      "profiles": [
+        "EN16931"
+      ]
+    },
+    {
+      "path": "artifacts/en16931/xslt/FACTUR-X_EN16931_codedb.xml",
+      "kind": "code-list",
+      "sha256": "70339a41d71b02bb97683f8eea04acbd764e077a88a446b32860d89c3351b62f",
+      "profiles": [
+        "EN16931"
+      ]
+    }
+  ]
 }
