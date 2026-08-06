@@ -1,4 +1,16 @@
+import {
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
+
+import {
+  validateXmlWithXsd,
+} from "../validation/xsd-validator";
 
 import {
   centsToDecimalString,
@@ -205,6 +217,57 @@ describe("structured invoice + XML", () => {
       valid: true,
       errors: [],
     });
+  });
+
+  it("audite le XML généré avec le XSD officiel EN16931 1.09.2", () => {
+    const directory = mkdtempSync(
+      join(tmpdir(), "facturx-generated-xsd-"),
+    );
+
+    const xmlPath = join(
+      directory,
+      "generated-factur-x.xml",
+    );
+
+    try {
+      const xml = buildFacturxXml(data);
+
+      writeFileSync(
+        xmlPath,
+        xml,
+        "utf8",
+      );
+
+      const result = validateXmlWithXsd({
+        schemaPath: resolve(
+          "src/lib/facturx/validation/1.09/artifacts/en16931/Factur-X_1.09.2_EN16931.xsd",
+        ),
+        xmlPath,
+      });
+
+      if (!result.valid) {
+        console.error(
+          [
+            "",
+            "--- Generated Factur-X XSD audit ---",
+            `XML: ${xmlPath}`,
+            `Exit code: ${result.exitCode}`,
+            ...result.errors.map(
+              (error) => `- ${error}`,
+            ),
+          ].join("\n"),
+        );
+      }
+
+      expect(result.available).toBe(true);
+      expect(result.valid).toBe(true);
+      expect(result.exitCode).toBe(0);
+    } finally {
+      rmSync(directory, {
+        recursive: true,
+        force: true,
+      });
+    }
   });
 
   it("rejects incorrectly nested XML elements", () => {

@@ -84,15 +84,13 @@ function addressXml(address: StructuredPostalAddress): string {
 }
 
 function partyXml(tag: string, party: StructuredParty, isSeller: boolean): string {
-  const idBlocks = [
-    party.siret ? el("ram:ID", escapeXml(party.siret), { schemeID: "0009" }) : "",
-    party.siren
-      ? el(
-          "ram:SpecifiedLegalOrganization",
-          el("ram:ID", escapeXml(party.siren), { schemeID: "0002" }),
-        )
-      : "",
-  ].join("");
+  const partyId = party.siret 
+    ? el("ram:ID", escapeXml(party.siret), { schemeID: "0009" }) : "";
+  const legalOrganization = party.siren
+    ? el("ram:SpecifiedLegalOrganization", text("ram:ID", party.siren,
+      { schemeID: "0002" },
+    ),
+  )  : "";
 
   const contact =
     party.contactName || party.phone || party.email
@@ -125,11 +123,15 @@ function partyXml(tag: string, party: StructuredParty, isSeller: boolean): strin
   return el(
     tag,
     [
-      isSeller ? idBlocks : party.siret || party.siren ? idBlocks : "",
+      isSeller || party.siret
+      ? partyId
+      : "",
       text("ram:Name", party.name),
+      isSeller || party.siren
+        ? legalOrganization
+        : "",
       contact,
       addressXml(party.address),
-      party.email && !contact ? "" : "",
       vat,
     ].join(""),
   );
