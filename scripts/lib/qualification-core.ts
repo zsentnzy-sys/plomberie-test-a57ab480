@@ -1,17 +1,13 @@
 /**
- * Decision core of the Phase A qualification script.
+ * Decision core of the Factur-X end-to-end qualification script.
  *
- * It performs NO system access: the script feeds it structured results and the
- * core decides which steps pass, what the summary says and which exit code the
- * process must use. This keeps the decisions testable without veraPDF or Java.
- *
- * The core can never qualify the generator: Phase A ships no official XSD nor
- * Schematron artifacts.
+ * It performs no system access: the caller supplies structured validation
+ * results and this module decides whether qualification succeeds.
  */
 import { parseVeraPdfReport } from "./verapdf-report.js";
 import { GENERATOR_QUALIFICATION } from "../../src/lib/facturx/facturx-config.server.js";
 
-export type StepStatus = "PASS" | "FAIL" | "NOT IMPLEMENTED";
+export type StepStatus = "PASS" | "FAIL";
 
 export interface QualificationStep {
   name: string;
@@ -71,7 +67,7 @@ export interface QualificationResult {
 export const GENERATOR_QUALIFICATION_LINE =
   `Generator qualification: ${GENERATOR_QUALIFICATION.toUpperCase()}`;
 
-export const SUCCESS_LINE = "Vérifications Phase A réussies";
+export const SUCCESS_LINE = "Qualification Factur-X réussie";
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
@@ -270,7 +266,7 @@ export function buildSummary(
     | "QUALIFIED"
     | "QUALIFICATION_FAILED",
 ): string[] {
-  const lines = ["--- Résumé Phase A ---"];
+  const lines = ["--- Qualification Factur-X ---"];
   for (const step of steps) {
     lines.push(
       step.detail
@@ -278,7 +274,6 @@ export function buildSummary(
         : `${step.name}: ${step.status}`,
     );
   }
-  // Never conditional: Phase A can never qualify the generator.
   lines.push(`Generator qualification: ${generatorQualification.toUpperCase()}`);
   if (success) lines.push(SUCCESS_LINE);
   return lines;

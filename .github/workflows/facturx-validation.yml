@@ -1,8 +1,12 @@
-name: Factur-X Phase A structural checks
+name: Factur-X qualification
 
-# Phase A only: structural PDF/A-3B checks + internal self-checks.
-# This workflow does NOT perform official Factur-X XSD / EN 16931 Schematron
-# validation and never qualifies the generator.
+# End-to-end Factur-X generator qualification:
+# - unit and build checks
+# - official EN16931 XSD
+# - official EN16931 Schematron
+# - visible PDF / structured-data consistency
+# - embedded XML consistency
+# - PDF/A-3B validation with veraPDF
 
 on:
   pull_request:
@@ -40,7 +44,7 @@ env:
   VERAPDF_SHA256: ${{ vars.VERAPDF_SHA256 }}
 
 jobs:
-  structural-checks:
+  qualification:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -160,7 +164,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: facturx-phase-a-report
+          name: facturx-qualification-report
           path: |
             facturx-report.txt
             facturx-artifacts-report.txt

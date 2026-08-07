@@ -1,15 +1,20 @@
 /**
- * Phase A qualification script — NOT part of the runtime.
+ * End-to-end Factur-X generator qualification script.
  *
- * This file only performs system access (running tools, rendering the
- * reference invoice, reading/writing files). Every decision lives in
- * scripts/lib/qualification-core.ts, which is unit-tested.
+ * This script validates a real generated hybrid invoice through:
+ * - internal structured-invoice checks
+ * - PDF/A-3 structural checks
+ * - embedded XML extraction and consistency
+ * - visible PDF / structured-data consistency
+ * - official Factur-X EN16931 XSD
+ * - official EN16931 Schematron
+ * - veraPDF PDF/A-3B validation
  *
  *   bun run validate:facturx
  *
- * Exit code 1 means the Phase A checks did not pass. A success NEVER means the
- * generator is qualified: the official Factur-X XSD and the EN 16931
- * Schematron are not integrated yet (Phase B).
+ * Exit code 0 means the reference generator pipeline passed every
+ * qualification step.
+ * Exit code 1 means qualification failed.
  */
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -23,8 +28,8 @@ import {
   type ToolExecutionResult,
 } from "./lib/qualification-core.js";
 
-import { validateXmlWithSchematron } from "../src/lib/facturx/validation/schematron-validator"
-import { validateXmlWithXsd } from "../src/lib/facturx/validation/xsd-validator"
+import { validateXmlWithSchematron } from "../src/lib/facturx/validation/schematron-validator.js"
+import { validateXmlWithXsd } from "../src/lib/facturx/validation/xsd-validator.js"
 import { validatePdfXmlConsistency } from "./lib/pdf-xml-consistency.js";
 
 import { renderDocumentPdf, computeTotals } from "../src/lib/documents.server";
@@ -40,7 +45,6 @@ import {
   toFacturxPdfA3,
 } from "../src/lib/facturx/facturx-pdfa.server";
 import { FACTURX_CONFIG } from "../src/lib/facturx/facturx-config.server";
-import { validateXmlWithXsd } from "../src/lib/facturx/validation/xsd-validator.js";
 
 function runTool(cmd: string, args: string[]): ToolExecutionResult {
   const execution = spawnSync(cmd, args, {
@@ -153,6 +157,12 @@ const hybrid = await toFacturxPdfA3(pdf, {
 const pdfA3SelfChecks = await assertPdfA3Structure(hybrid);
 
 const pdfPath = join(outDir, "reference.pdf");
+const xmlPath = join(outDir, "factur-x.xml");
+const veraPdfReportPath = join(outDir, "verapdf-report.xml");
+const generatedXmlBytes = new TextEncoder().encode(xml);
+
+writeFileSync(pdfPath, hybrid);
+writeFileSync(xmlPath, generatedXmlBytes);
 const pdfTextRun = runTool(
   "pdftotext",
   [
@@ -216,12 +226,6 @@ const pdfXmlConsistency =
             : "pdftotext n'est pas installé.",
         ],
       };
-const xmlPath = join(outDir, "factur-x.xml");
-const veraPdfReportPath = join(outDir, "verapdf-report.xml");
-const generatedXmlBytes = new TextEncoder().encode(xml);
-
-writeFileSync(pdfPath, hybrid);
-writeFileSync(xmlPath, generatedXmlBytes);
 const referencePdfExists = existsSync(pdfPath);
 const externalXml = existsSync(xmlPath)
   ? new Uint8Array(readFileSync(xmlPath))
@@ -278,7 +282,7 @@ const schematronValidation = schematronResult
   : {
     valide: false,
     errors: [
-      "XML embarqué indisponible pour validation Schematron"
+      "XML embarqué indisponible pour validation Schematron."
     ],
   };
 
@@ -345,8 +349,8 @@ if (schematronWarnings.length > 0) {
 
 console.log(`\n${result.summary.join("\n")}`);
 console.log(
-  `\nVersion de spécification implémentée : ${FACTURX_CONFIG.implementedSpecificationVersion} ` +
-    `(cible Phase B : ${FACTURX_CONFIG.targetSpecificationVersion}).`,
+  `\nFactur-X ${FACTURX_CONFIG.implementedSpecificationVersion} ` +
+    `— artefacts de validation ${FACTURX_CONFIG.validationArtifactsVersion}.`,
 );
 
 process.exit(result.exitCode);

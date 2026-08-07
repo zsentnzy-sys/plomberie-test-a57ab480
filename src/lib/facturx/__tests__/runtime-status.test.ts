@@ -12,21 +12,24 @@ import {
   type RuntimeStatusUpdate,
 } from "../runtime-status.server";
 
+import { GENERATOR_QUALIFICATION } from "../facturx-config.server";
+
 const ok = async () => ({ error: null });
 
 describe("buildRuntimeStatusUpdate", () => {
-  it("ouvre le cycle en pending sans jamais qualifier le générateur", () => {
+  it("ouvre le cycle en pending avec le statut de qualification du générateur", () => {
     const update = buildRuntimeStatusUpdate("pending");
+
     expect(update.runtime_validation_status).toBe("pending");
-    expect(update.generator_qualification_status).toBe("unqualified");
+    expect(update.generator_qualification_status).toBe(GENERATOR_QUALIFICATION);
     expect(update.external_validation_status).toBe("not_run");
     expect(update.facturx_validation_errors).toBeNull();
   });
 
-  it("conserve unqualified / not_run en cas de succès", () => {
+  it("conserve la qualification du générateur et not_run en cas de succès", () => {
     const update = buildRuntimeStatusUpdate("passed");
     expect(update.runtime_validation_status).toBe("passed");
-    expect(update.generator_qualification_status).toBe("unqualified");
+    expect(update.generator_qualification_status).toBe(GENERATOR_QUALIFICATION);
     expect(update.external_validation_status).toBe("not_run");
   });
 
@@ -34,7 +37,7 @@ describe("buildRuntimeStatusUpdate", () => {
     const update = buildRuntimeStatusUpdate("failed", ["montants incohérents"]);
     expect(update.runtime_validation_status).toBe("failed");
     expect(update.facturx_validation_errors).toEqual(["montants incohérents"]);
-    expect(update.generator_qualification_status).toBe("unqualified");
+    expect(update.generator_qualification_status).toBe(GENERATOR_QUALIFICATION);
   });
 
   it("ne touche jamais aux colonnes d'envoi", () => {
@@ -99,7 +102,7 @@ describe("tryPersistRuntimeFailure", () => {
 
     expect(outcome.persisted).toBe(true);
     expect(writes[0].runtime_validation_status).toBe("failed");
-    expect(writes[0].generator_qualification_status).toBe("unqualified");
+    expect(writes[0].generator_qualification_status).toBe(GENERATOR_QUALIFICATION);
     expect(writes[0].external_validation_status).toBe("not_run");
   });
 
@@ -155,7 +158,7 @@ describe("cycle complet", () => {
       "passed",
     ]);
     expect(
-      writes.every((w) => w.generator_qualification_status === "unqualified"),
+      writes.every((w) => w.generator_qualification_status === GENERATOR_QUALIFICATION),
     ).toBe(true);
   });
 

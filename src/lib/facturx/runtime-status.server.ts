@@ -1,11 +1,11 @@
 // Server-only: lifecycle of the INTERNAL self-check statuses of an invoice.
 //
-// These statuses describe self-checks only. They never express an official
-// Factur-X qualification: the generator stays `unqualified` and the external
-// validation stays `not_run` in Phase A.
+// These statuses describe self-checks only.
 //
 // Nothing here may ever touch the send state of an invoice (status, sent_at,
 // email_*_status, email_*_error) — regeneration must not alter it.
+
+import { GENERATOR_QUALIFICATION, type GeneratorQualificationStatus } from "./facturx-config.server";
 
 export type RuntimeSelfCheckStatus = "pending" | "passed" | "failed";
 
@@ -35,7 +35,7 @@ export function buildFacturxGenerationUserError(): Error {
 
 export interface RuntimeStatusUpdate {
   runtime_validation_status: RuntimeSelfCheckStatus;
-  generator_qualification_status: "unqualified";
+  generator_qualification_status: GeneratorQualificationStatus;
   external_validation_status: "not_run";
   facturx_validation_errors: string[] | null;
   facturx_validated_at: string;
@@ -65,8 +65,9 @@ export function buildRuntimeStatusUpdate(
 ): RuntimeStatusUpdate {
   return {
     runtime_validation_status: status,
-    // Never earned at runtime.
-    generator_qualification_status: "unqualified",
+    // Qualification belongs to the generator build, not to this runtime cycle.
+    generator_qualification_status:
+      GENERATOR_QUALIFICATION,
     external_validation_status: "not_run",
     facturx_validation_errors: errors.length ? errors : null,
     facturx_validated_at: now,

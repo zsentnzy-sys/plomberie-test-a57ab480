@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   evaluateQualification,
-  GENERATOR_QUALIFICATION_LINE,
   SUCCESS_LINE,
   type QualificationInputs,
   type ToolExecutionResult,
@@ -206,7 +205,7 @@ describe("evaluateQualification — auto-contrôles internes", () => {
   });
 });
 
-describe("evaluateQualification — scénario Phase A complet", () => {
+describe("evaluateQualification — scénario de qualification complet", () => {
   const result = evaluateQualification(inputs());
 
   it("réussit avec un code de sortie nul", () => {
@@ -248,9 +247,11 @@ describe("evaluateQualification — scénario Phase A complet", () => {
     );
   });
 
-  it("n'annonce jamais une qualification Factur-X réussie", () => {
+  it("annonce la qualification Factur-X quand toute la chaîne passe", () => {
     const text = result.summary.join("\n");
-    expect(text).not.toContain("Qualification Factur-X réussie");
+
+    expect(text).toContain("Qualification Factur-X réussie");
+    expect(text).toContain("Generator qualification: QUALIFIED");
     expect(text).toContain(SUCCESS_LINE);
   });
 
