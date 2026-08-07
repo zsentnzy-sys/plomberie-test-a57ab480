@@ -111,14 +111,32 @@ function partyXml(tag: string, party: StructuredParty, isSeller: boolean): strin
         )
       : "";
 
-  const vat = party.vatNumber
+  const taxRegistration = [
+    party.vatNumber
+      ? el(
+          "ram:SpecifiedTaxRegistration",
+          text("ram:ID", party.vatNumber
+            .replace(/\s/g, "")
+            .toUpperCase(),
+          {
+            schemeID: "VA",
+          },
+        ),
+      )
+    :"",
+  isSeller && party.siren
     ? el(
         "ram:SpecifiedTaxRegistration",
-        el("ram:ID", escapeXml(party.vatNumber.replace(/\s/g, "").toUpperCase()), {
-          schemeID: "VA",
-        }),
+        text(
+          "ram:ID",
+          party.siren,
+          { 
+            schemeID: "FC",
+          },
+        ),
       )
-    : "";
+    : "",
+  ].join("");
 
   return el(
     tag,
@@ -132,7 +150,7 @@ function partyXml(tag: string, party: StructuredParty, isSeller: boolean): strin
         : "",
       contact,
       addressXml(party.address),
-      vat,
+      taxRegistration,
     ].join(""),
   );
 }
@@ -219,17 +237,23 @@ export function buildFacturxXml(data: StructuredInvoiceData): string {
     "ram:ApplicableHeaderTradeDelivery",
     [
       data.deliveryAddress
-        ? el("ram:ShipToTradeParty", [
+        ? el(
+          "ram:ShipToTradeParty",
+          [
             text("ram:Name", data.buyer.name),
             addressXml(data.deliveryAddress),
-          ].join(""))
-        : "",
-      data.deliveryDate
+          ].join(""),
+        )
+      : "",
+    data.deliveryDate
         ? el(
-            "ram:ActualDeliverySupplyChainEvent",
-            dateEl("ram:OccurrenceDateTime", data.deliveryDate),
-          )
-        : "",
+          "ram:ActualDeliverySupplyChainEvent",
+          dateEl(
+            "ram:OccurenceDateTime",
+            data.deliveryDate,
+          ),
+        )
+      : "",
     ].join(""),
   );
 

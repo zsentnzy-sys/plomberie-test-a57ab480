@@ -13,6 +13,10 @@ import {
 } from "../validation/xsd-validator";
 
 import {
+  validateXmlWithSchematron,
+} from "../validation/schematron-validator";
+
+import {
   centsToDecimalString,
   lineNetCents,
   toCents,
@@ -263,12 +267,85 @@ describe("structured invoice + XML", () => {
       expect(result.valid).toBe(true);
       expect(result.exitCode).toBe(0);
     } finally {
+      if (process.env.KEEP_FACTURX_AUDIT !== "1") {
+        rmSync(directory, {
+          recursive: true,
+          force: true,
+        });
+      } else {
+        console.log(`XML d'audit conservé : ${xmlPath}`);
+      }
+    }
+  });
+
+  it("passe les règles bloquantes du Schematron officiel EN16931 1.09.2", () => {
+    const directory = mkdtempSync(
+      join(tmpdir(), "facturx-generated-schematron-"),
+    );
+
+    const xmlPath = join(
+      directory,
+      "generated-factur-x.xml",
+    );
+
+    try {
+      writeFileSync(
+        xmlPath,
+        buildFacturxXml(data),
+        "utf8",
+      );
+
+      const result =
+        validateXmlWithSchematron({
+          xmlPath,
+          xsltPath: resolve(
+            "src/lib/facturx/validation/1.09/artifacts/en16931/xslt/FACTUR-X_EN16931.xslt",
+          ),
+        });
+
+      if (!result.valid) {
+        console.error(
+          [
+            "",
+            "--- Generated Factur-X Schematron audit ---",
+            `Exit code: ${result.exitCode}`,
+            `Blocking assertions: ${result.blockingAssertions.length}`,
+            ...result.blockingAssertions.map(
+              (assertion) =>
+                [
+                  `- ${assertion.id}`,
+                  `  Flag: ${assertion.flag ?? "UNKNOWN"}`,
+                  `  Location: ${assertion.location ?? "UNKNOWN"}`,
+                  `  Message: ${assertion.message}`,
+                ].join("\n"),
+            ),
+          ].join("\n"),
+        );
+      }
+
+      expect(result.available).toBe(true);
+      expect(result.exitCode).toBe(0);
+
+      expect(
+        result.blockingAssertions,
+      ).toEqual([]);
+
+      expect(result.valid).toBe(true);
+
+      expect(
+        result.warnings.some(
+          (warning) =>
+            warning.id ===
+            "PEPPOL-EN16931-R008",
+        ),
+      ).toBe(true);
+    } finally {
       rmSync(directory, {
         recursive: true,
         force: true,
       });
     }
-  });
+});
 
   it("rejects incorrectly nested XML elements", () => {
     const result = validateXmlSyntax(
