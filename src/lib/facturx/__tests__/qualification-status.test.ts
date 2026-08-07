@@ -10,7 +10,7 @@ import {
 const root = join(import.meta.dirname, "..", "..", "..", "..");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
 
-describe("Phase A — versions", () => {
+describe("Factur-X — versions et qualification", () => {
   it("implements the Factur-X 1.09 specification", () => {
     expect(FACTURX_CONFIG.implementedSpecificationVersion).toBe("1.09");
     expect(FACTURX_CONFIG.targetSpecificationVersion).toBe("1.09");
@@ -23,6 +23,7 @@ describe("Phase A — versions", () => {
   });
 
   it("ships official EN16931 1.09.2 artifacts and marks the generator qualified", () => {
+    expect(FACTURX_CONFIG.implementedSpecificationVersion).toBe("1.09");
     expect(FACTURX_CONFIG.validationArtifactsVersion).toBe("1.09.2");
     expect(GENERATOR_QUALIFICATION).toBe("qualified");
   });
@@ -32,7 +33,7 @@ describe("Phase A — versions", () => {
 // cohérence XML, résumé non trompeur) est couvert par des tests comportementaux
 // dans scripts/lib/qualification-core.test.ts.
 
-describe("Phase A — Supabase write failures", () => {
+describe("Factur-X — persistance Supabase", () => {
   const src = read("src/lib/invoices-pdf.server.ts");
 
   it("checks the final compliance update result", () => {
