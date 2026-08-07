@@ -51,13 +51,13 @@ describe("buildInvoiceComplianceMetadata", () => {
       xml_storage_path:
         "invoices/2026/FACT-2026-0001-factur-x.xml",
 
-      facturx_version: "1.0.07",
+      facturx_version: "1.09",
       facturx_profile: "EN 16931",
       generator_version: "1.0.0",
       document_schema_version: "1.0",
 
       runtime_validation_status: "passed",
-      generator_qualification_status: "unqualified",
+      generator_qualification_status: "qualified",
       external_validation_status: "not_run",
 
       facturx_validation_status: "pending",

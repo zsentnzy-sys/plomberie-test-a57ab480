@@ -215,9 +215,37 @@ describe("evaluateQualification — scénario Phase A complet", () => {
     expect(result.steps.every((s) => s.status === "PASS")).toBe(true);
   });
 
-  it("laisse le générateur non qualifié même en cas de succès", () => {
-    expect(result.generatorQualification).toBe("UNQUALIFIED");
-    expect(result.summary).toContain(GENERATOR_QUALIFICATION_LINE);
+  it("qualifie le générateur quand toute la chaîne passe", () => {
+    const result = evaluateQualification(inputs());
+
+    expect(result.generatorQualification).toBe(
+      "QUALIFIED",
+    );
+
+    expect(result.summary).toContain(
+      "Generator qualification: QUALIFIED",
+    );
+  });
+
+  it("marque la qualification en échec si un contrôle échoue", () => {
+    const result = evaluateQualification(
+      inputs({
+        xsdValidation: {
+          valid: false,
+          errors: ["XSD rejeté"],
+        },
+      }),
+    );
+
+    expect(result.success).toBe(false);
+
+    expect(
+      result.generatorQualification,
+    ).toBe("QUALIFICATION_FAILED");
+
+    expect(result.summary).toContain(
+      "Generator qualification: QUALIFICATION_FAILED",
+    );
   });
 
   it("n'annonce jamais une qualification Factur-X réussie", () => {

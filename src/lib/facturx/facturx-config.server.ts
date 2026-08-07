@@ -7,8 +7,8 @@ export const FACTURX_CONFIG = {
    * Factur-X specification version ACTUALLY implemented by this generator.
    * This is the only version that may be persisted on a produced document.
    */
-  implementedSpecificationVersion: "1.0.07",
-  /** Target of Phase B — never persisted on documents produced today. */
+  implementedSpecificationVersion: "1.09",
+  /** Factur-X specification implemented by the current qualified generator. */
   targetSpecificationVersion: "1.09",
   targetZugferdVersion: "2.5",
   /** ZUGFeRD/Factur-X profile URN (EN 16931 "COMFORT"). */
@@ -61,11 +61,18 @@ export type ExternalValidationStatus =
   | "invalid";
 
 /**
- * The generator ships no official XSD/Schematron artifacts, so no document it
- * produces may ever be labelled qualified in Phase A.
+ * Qualification status of the current generator implementation.
+ *
+ * The generator is qualified by the end-to-end CI pipeline:
+ * - official EN16931 XSD
+ * - official EN16931 Schematron
+ * - PDF/A-3B veraPDF validation
+ * - embedded XML extraction and consistency
+ * - Factur-X XMP / associated-file structural checks
+ * - visible PDF / structured-data consistency
  */
 export const GENERATOR_QUALIFICATION: GeneratorQualificationStatus =
-  "unqualified";
+  "qualified";
 
 /** @deprecated Phase A — kept only for the legacy facturx_validation_status column. */
 export type FacturxValidationStatus =

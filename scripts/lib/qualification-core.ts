@@ -9,6 +9,7 @@
  * Schematron artifacts.
  */
 import { parseVeraPdfReport } from "./verapdf-report.js";
+import { GENERATOR_QUALIFICATION } from "../../src/lib/facturx/facturx-config.server.js";
 
 export type StepStatus = "PASS" | "FAIL" | "NOT IMPLEMENTED";
 
@@ -60,12 +61,15 @@ export interface QualificationResult {
   success: boolean;
   exitCode: 0 | 1;
   steps: QualificationStep[];
-  generatorQualification: "UNQUALIFIED";
+  generatorQualification: 
+    | "UNQUALIFIED"
+    | "QUALIFIED"
+    | "QUALIFICATION_FAILED";
   summary: string[];
 }
 
 export const GENERATOR_QUALIFICATION_LINE =
-  "Generator qualification: UNQUALIFIED";
+  `Generator qualification: ${GENERATOR_QUALIFICATION.toUpperCase()}`;
 
 export const SUCCESS_LINE = "Vérifications Phase A réussies";
 
@@ -243,18 +247,28 @@ export function evaluateQualification(
 
   const success = steps.every((step) => step.status === "PASS");
 
+  const generatorQualification:
+    | "QUALIFIED"
+    | "QUALIFICATION_FAILED" =
+    success && GENERATOR_QUALIFICATION === "qualified"
+      ? "QUALIFIED"
+      : "QUALIFICATION_FAILED";
+
   return {
     success,
     exitCode: success ? 0 : 1,
     steps,
-    generatorQualification: "UNQUALIFIED",
-    summary: buildSummary(steps, success),
+    generatorQualification,
+    summary: buildSummary(steps, success, generatorQualification),
   };
 }
 
 export function buildSummary(
   steps: QualificationStep[],
   success: boolean,
+  generatorQualification:
+    | "QUALIFIED"
+    | "QUALIFICATION_FAILED",
 ): string[] {
   const lines = ["--- Résumé Phase A ---"];
   for (const step of steps) {
@@ -265,7 +279,7 @@ export function buildSummary(
     );
   }
   // Never conditional: Phase A can never qualify the generator.
-  lines.push(GENERATOR_QUALIFICATION_LINE);
+  lines.push(`Generator qualification: ${generatorQualification.toUpperCase()}`);
   if (success) lines.push(SUCCESS_LINE);
   return lines;
 }

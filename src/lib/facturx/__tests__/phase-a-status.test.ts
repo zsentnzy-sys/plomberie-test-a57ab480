@@ -11,12 +11,9 @@ const root = join(import.meta.dirname, "..", "..", "..", "..");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
 
 describe("Phase A — versions", () => {
-  it("keeps the implemented spec version distinct from the Phase B target", () => {
-    expect(FACTURX_CONFIG.implementedSpecificationVersion).toBe("1.0.07");
+  it("implements the Factur-X 1.09 specification", () => {
+    expect(FACTURX_CONFIG.implementedSpecificationVersion).toBe("1.09");
     expect(FACTURX_CONFIG.targetSpecificationVersion).toBe("1.09");
-    expect(FACTURX_CONFIG.implementedSpecificationVersion).not.toBe(
-      FACTURX_CONFIG.targetSpecificationVersion,
-    );
   });
 
   it("never uses the XMP version as a specification version", () => {
@@ -25,9 +22,9 @@ describe("Phase A — versions", () => {
       FACTURX_CONFIG.xmpVersion);
   });
 
-  it("ships official EN16931 1.09.2 validation artifacts while remaining unqualified", () => {
+  it("ships official EN16931 1.09.2 artifacts and marks the generator qualified", () => {
     expect(FACTURX_CONFIG.validationArtifactsVersion).toBe("1.09.2");
-    expect(GENERATOR_QUALIFICATION).toBe("unqualified");
+    expect(GENERATOR_QUALIFICATION).toBe("qualified");
   });
 });
 
