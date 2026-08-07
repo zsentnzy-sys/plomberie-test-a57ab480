@@ -52,11 +52,18 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
       - name: Install XML validation tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxml2-utils
+          sudo apt-get install -y libxml2-utils libsaxonhe-java
           xmllint --version
+          test -f /usr/share/java/Saxon-HE.jar
+          java -cp /usr/share/java/Saxon-HE.jar net.sf.saxon.Transform -? >/dev/null
 
       - name: Typecheck
         run: bun run typecheck
@@ -68,7 +75,7 @@ jobs:
         run: |
           set -o pipefail
           bun run verify:facturx-artifacts \
-            | tee facturx-artifacts-report.text
+            | tee facturx-artifacts-report.txt
       - name: Verify Official EN16931 XSD rejects invalid XML
         run: | 
           set +e
@@ -90,11 +97,6 @@ jobs:
 
       - name: Build
         run: bun run build
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
 
       - name: Install pinned veraPDF
         run: |
@@ -133,7 +135,7 @@ jobs:
           java -jar "$installer" auto-install.xml
           echo "${{ github.workspace }}/verapdf" >> "$GITHUB_PATH"
 
-      - name: Factur-X Phase A checks
+      - name: Factur-X validation
         run: bun run validate:facturx | tee facturx-report.txt
 
       - name: Upload reports
