@@ -59,11 +59,29 @@ jobs:
 
       - name: Install XML validation tools
         run: |
+          set -euo pipefail
+          
           sudo apt-get update
           sudo apt-get install -y libxml2-utils libsaxonhe-java
           xmllint --version
-          test -f /usr/share/java/Saxon-HE.jar
-          java -cp /usr/share/java/Saxon-HE.jar net.sf.saxon.Transform -? >/dev/null
+          SAXON_JAR="$(
+            dpkg -L libsaxonhe-java \
+              | grep -E '/Saxon-HE[^/]*\.jar$' \
+              | head -n1
+          )"
+          if [ -z "$SAXON_JAR" ]; then
+            echo "::error::Impossible de localiser Saxon-HE.jar"
+            exit 1
+          fi
+          if [ ! -f "$SAXON_JAR" ]; then
+            echo "::error::JAR Saxon introuvable : $SAXON_JAR"
+            exit 1
+          fi
+          echo "SAXON_JAR=$SAXON_JAR" >> "$GITHUB_ENV"
+          echo "Saxon JAR: $SAXON_JAR"
+          
+          test -f "$SAXON_JAR"
+          java -cp "$SAXON_JAR" net.sf.saxon.Transform -? >/dev/null
 
       - name: Typecheck
         run: bun run typecheck
