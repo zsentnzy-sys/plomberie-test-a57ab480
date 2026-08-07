@@ -37,7 +37,7 @@ export const FACTURX_CONFIG = {
    * Version of the OFFICIAL validation artifacts (XSD/Schematron) bundled with
    * the generator. null = none bundled, so no qualification is possible.
    */
-  validationArtifactsVersion: null,
+  validationArtifactsVersion: "1.09.2",
 } as const;
 
 /** Internal self-checks performed at generation time. NOT official validation. */
@@ -65,7 +65,7 @@ export type ExternalValidationStatus =
  * produces may ever be labelled qualified in Phase A.
  */
 export const GENERATOR_QUALIFICATION: GeneratorQualificationStatus =
-  FACTURX_CONFIG.validationArtifactsVersion === null ? "unqualified" : "unqualified";
+  "unqualified";
 
 /** @deprecated Phase A — kept only for the legacy facturx_validation_status column. */
 export type FacturxValidationStatus =

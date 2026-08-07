@@ -40,6 +40,10 @@ export interface QualificationInputs {
   xmlSyntax: CheckOutcome;
   /** Internal PDF/A-3 structural self-checks. */
   pdfA3SelfChecks: CheckOutcome;
+  xsdValidation: CheckOutcome;
+  schematronValidation: CheckOutcome;
+  schematronWarnings?: string[];
+  pdfXmlConsistency: CheckOutcome;
   /** The reference PDF was written to disk. */
   referencePdfExists: boolean;
   /** Raw veraPDF XML report, when one was produced. */
@@ -59,11 +63,6 @@ export interface QualificationResult {
   generatorQualification: "UNQUALIFIED";
   summary: string[];
 }
-
-export const NOT_IMPLEMENTED_LINES = [
-  "XSD Factur-X 1.09: NOT IMPLEMENTED",
-  "Schematron EN 16931: NOT IMPLEMENTED",
-] as const;
 
 export const GENERATOR_QUALIFICATION_LINE =
   "Generator qualification: UNQUALIFIED";
@@ -236,6 +235,9 @@ export function evaluateQualification(
     outcomeStep("XML well-formedness", inputs.xmlSyntax),
     outcomeStep("Internal PDF/A-3 self-checks", inputs.pdfA3SelfChecks),
     ...xmlSteps(inputs),
+    outcomeStep("Visible PDF / XML consistency", inputs.pdfXmlConsistency),
+    outcomeStep("Official Factur-X XSD 1.09.2", inputs.xsdValidation),
+    outcomeStep("Official EN16931 Schematron 1.09.2", inputs.schematronValidation),
     veraPdfStep(inputs),
   ];
 
@@ -262,7 +264,6 @@ export function buildSummary(
         : `${step.name}: ${step.status}`,
     );
   }
-  lines.push(...NOT_IMPLEMENTED_LINES);
   // Never conditional: Phase A can never qualify the generator.
   lines.push(GENERATOR_QUALIFICATION_LINE);
   if (success) lines.push(SUCCESS_LINE);

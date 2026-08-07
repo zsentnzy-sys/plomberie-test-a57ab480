@@ -14,7 +14,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { PDFDocument } from "@cantoo/pdf-lib";
 
@@ -22,6 +22,10 @@ import {
   evaluateQualification,
   type ToolExecutionResult,
 } from "./lib/qualification-core.js";
+
+import { validateXmlWithSchematron } from "../src/lib/facturx/validation/schematron-validator"
+import { validateXmlWithXsd } from "../src/lib/facturx/validation/xsd-validator"
+import { validatePdfXmlConsistency } from "./lib/pdf-xml-consistency.js";
 
 import { renderDocumentPdf, computeTotals } from "../src/lib/documents.server";
 import { ARTISAN_INFO } from "../src/lib/artisan.server";
@@ -36,6 +40,7 @@ import {
   toFacturxPdfA3,
 } from "../src/lib/facturx/facturx-pdfa.server";
 import { FACTURX_CONFIG } from "../src/lib/facturx/facturx-config.server";
+import { validateXmlWithXsd } from "../src/lib/facturx/validation/xsd-validator.js";
 
 function runTool(cmd: string, args: string[]): ToolExecutionResult {
   const execution = spawnSync(cmd, args, {
@@ -148,6 +153,69 @@ const hybrid = await toFacturxPdfA3(pdf, {
 const pdfA3SelfChecks = await assertPdfA3Structure(hybrid);
 
 const pdfPath = join(outDir, "reference.pdf");
+const pdfTextRun = runTool(
+  "pdftotext",
+  [
+    "-layout",
+    pdfPath,
+    "-",
+  ],
+);
+const pdfXmlConsistency =
+  pdfTextRun.available &&
+  pdfTextRun.exitCode === 0
+    ? validatePdfXmlConsistency({
+        pdfText:
+          pdfTextRun.stdout ?? "",
+
+        invoiceNumber:
+          structured.invoiceNumber,
+
+        buyerName:
+          structured.buyer.name,
+
+        totalHt:
+          `${(
+            structured.totals
+              .lineTotalCents / 100
+          )
+            .toFixed(2)
+            .replace(".", ",")} EUR`,
+
+        totalTva:
+          `${(
+            structured.totals
+              .taxTotalCents / 100
+          )
+            .toFixed(2)
+            .replace(".", ",")} EUR`,
+
+        totalTtc:
+          `${(
+            structured.totals
+              .grandTotalCents / 100
+          )
+            .toFixed(2)
+            .replace(".", ",")} EUR`,
+
+        lines:
+          structured.lines.map(
+            (line) => ({
+              description:
+                line.description,
+              vatRate:
+                line.vatRate,
+            }),
+          ),
+      })
+    : {
+        valid: false,
+        errors: [
+          pdfTextRun.available
+            ? `pdftotext a échoué avec le code ${pdfTextRun.exitCode}.`
+            : "pdftotext n'est pas installé.",
+        ],
+      };
 const xmlPath = join(outDir, "factur-x.xml");
 const veraPdfReportPath = join(outDir, "verapdf-report.xml");
 const generatedXmlBytes = new TextEncoder().encode(xml);
@@ -168,6 +236,57 @@ const embedded = attachments.find(
 const embeddedXml = embedded?.data
   ? new Uint8Array(embedded.data as unknown as ArrayBufferLike)
   : undefined;
+
+const embeddedXmlPath = join(outDir, "factur-x-extracted.xml");
+if (embeddedXml) {
+  writeFileSync(embeddedXmlPath, embeddedXml);
+}
+
+const xsdResult = embeddedXml
+  ? validateXmlWithXsd({
+      xmlPath: embeddedXmlPath,
+      schemaPath: resolve("src/lib/facturx/validation/1.09/artifacts/en16931/Factur-X_1.09.2_EN16931.xsd"),
+    })
+  : null;
+
+const xsdValidation = xsdResult
+  ? {
+      valid:
+        xsdResult.available && 
+        xsdResult.valid &&
+        xsdResult.exitCode === 0,
+      errors: xsdResult.errors,
+    }
+  : { valid: false, errors: ["XML embarqué indisponible pour validation XSD."] };
+
+const schematronResult = embeddedXml
+    ? validateXmlWithSchematron({
+      xmlPath: embeddedXmlPath,
+      xsltPath: resolve("src/lib/facturx/validation/1.09/artifacts/en16931/xslt/FACTUR-X_EN16931.xslt"),
+    })
+  : null;
+
+const schematronValidation = schematronResult
+    ? {
+        valid:
+          schematronResult.available &&
+          schematronResult.valid &&
+          schematronResult.exitCode === 0,
+        errors:
+          schematronResult.blockingAssertions.map((assertion) => `${assertion.id}: ${assertion.message}`)
+    }
+  : {
+    valide: false,
+    errors: [
+      "XML embarqué indisponible pour validation Schematron"
+    ],
+  };
+
+const schematronWarnings =
+  schematronResult?.warnings.map(
+    (warning) =>
+      `${warning.id}: ${warning.message}`,
+  ) ?? [];
 
 // --- veraPDF -------------------------------------------------------------
 let veraPdfRun: ToolExecutionResult = verapdfVersion;
@@ -194,6 +313,10 @@ const result = evaluateQualification({
   businessRules,
   xmlSyntax,
   pdfA3SelfChecks,
+  pdfXmlConsistency,
+  xsdValidation,
+  schematronValidation,
+  schematronWarnings,
   referencePdfExists,
   veraPdfReportXml,
   generatedXml: generatedXmlBytes,
@@ -209,6 +332,15 @@ if (verapdfVersion.available) {
   console.log(
     `verapdf version: ${(verapdfVersion.stdout ?? "").split("\n")[0]?.trim()}`,
   );
+}
+if (schematronWarnings.length > 0) {
+  console.log(
+    "\n--- Schematron warnings ---",
+  );
+
+  for (const warning of schematronWarnings) {
+    console.log(`- ${warning}`);
+  }
 }
 
 console.log(`\n${result.summary.join("\n")}`);

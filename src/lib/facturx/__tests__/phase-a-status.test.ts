@@ -25,8 +25,8 @@ describe("Phase A — versions", () => {
       FACTURX_CONFIG.xmpVersion);
   });
 
-  it("ships no official validation artifacts, so the generator stays unqualified", () => {
-    expect(FACTURX_CONFIG.validationArtifactsVersion).toBeNull();
+  it("ships official EN16931 1.09.2 validation artifacts while remaining unqualified", () => {
+    expect(FACTURX_CONFIG.validationArtifactsVersion).toBe("1.09.2");
     expect(GENERATOR_QUALIFICATION).toBe("unqualified");
   });
 });

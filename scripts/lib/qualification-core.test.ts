@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateQualification,
   GENERATOR_QUALIFICATION_LINE,
-  NOT_IMPLEMENTED_LINES,
   SUCCESS_LINE,
   type QualificationInputs,
   type ToolExecutionResult,
@@ -52,6 +51,10 @@ function inputs(overrides: Partial<QualificationInputs> = {}): QualificationInpu
     businessRules: { valid: true, errors: [] },
     xmlSyntax: { valid: true, errors: [] },
     pdfA3SelfChecks: { valid: true, errors: [] },
+    pdfXmlConsistency: { valid: true, errors: []},
+    xsdValidation : {valid: true, errors: []},
+    schematronValidation: {valid: true, errors: []},
+    schematronWarnings: [],
     referencePdfExists: true,
     veraPdfReportXml: compliantReport,
     generatedXml: xmlBytes,
@@ -217,15 +220,71 @@ describe("evaluateQualification — scénario Phase A complet", () => {
     expect(result.summary).toContain(GENERATOR_QUALIFICATION_LINE);
   });
 
-  it("garde les étapes hors Phase A en NOT IMPLEMENTED", () => {
-    for (const line of NOT_IMPLEMENTED_LINES) {
-      expect(result.summary).toContain(line);
-    }
-  });
-
   it("n'annonce jamais une qualification Factur-X réussie", () => {
     const text = result.summary.join("\n");
     expect(text).not.toContain("Qualification Factur-X réussie");
     expect(text).toContain(SUCCESS_LINE);
+  });
+
+  it("échoue si le PDF visible diffère des données structurées", () => {
+    const result = evaluateQualification(
+      inputs({
+        pdfXmlConsistency: {
+          valid: false,
+          errors: [
+            "Total TTC absent du PDF visible",
+          ],
+        },
+      }),
+    );
+
+    expect(result.success).toBe(false);
+
+    expect(
+      stepOf(
+        result,
+        "Visible PDF / XML consistency",
+      )?.status,
+    ).toBe("FAIL");
+  });
+
+  it("échoue quand le XSD officiel rejette le XML embarqué", () => {
+    const result = evaluateQualification(
+      inputs({
+        xsdValidation: {
+          valid: false,
+          errors: ["XSD officiel rejeté"],
+        },
+      }),
+    );
+    expect(result.success).toBe(false);
+    expect(
+      stepOf(
+        result,
+        "Official Factur-X XSD 1.09.2",
+      )?.status,
+    ).toBe("FAIL");
+  })
+
+  it("échoue sur une règle Schematron bloquante", () => {
+    const result = evaluateQualification(
+      inputs({
+        schematronValidation: {
+          valid: false,
+          errors: [
+            "BR-S-02: Seller tax identifier missing",
+          ],
+        },
+      }),
+    );
+
+    expect(result.success).toBe(false);
+
+    expect(
+      stepOf(
+        result,
+        "Official EN16931 Schematron 1.09.2",
+      )?.status,
+    ).toBe("FAIL");
   });
 });

@@ -252,9 +252,40 @@ export async function assertPdfA3Structure(
     errors.push("AFRelationship différent de Alternative");
 
   const raw = new TextDecoder("latin1").decode(bytes.slice(0, bytes.length));
+  const expectedXmpValues = [
+    {
+      label: "PDF/A part",
+      pattern: /<pdfaid:part>3<\/pdfaid:part>/,
+    },
+    {
+      label: "PDF/A conformance",
+      pattern: /<pdfaid:conformance>B<\/pdfaid:conformance>/,
+    },
+    {
+      label: "Factur-X DocumentFileName",
+      pattern: /<fx:DocumentFileName>factur-x\.xml<\/fx:DocumentFileName>/,
+    },
+    {
+      label: "Factur-X DocumentType",
+      pattern: /<fx:DocumentType>INVOICE<\/fx:DocumentType>/,
+    },
+    {
+      label: "Factur-X Version",
+      pattern: /<fx:Version>1\.0<\/fx:Version>/,
+    },
+    {
+      label: "Factur-X ConformanceLevel",
+      pattern: /<fx:ConformanceLevel>EN 16931<\/fx:ConformanceLevel>/,
+    },
+  ];
+  for (const expected of expectedXmpValues) {
+    if (!expected.pattern.test(raw)) {
+      errors.push(`Métadonnée XMP incorrecte ou absente : ${expected.label}`);
+    }
+  }
+
   if (/\/BaseFont\s*\/(Helvetica|Times|Courier|Symbol|ZapfDingbats)\b/.test(raw))
     errors.push("Police standard non incorporée détectée");
-  if (!/pdfaid:part>3</.test(raw)) errors.push("Identification PDF/A-3 absente du XMP");
 
   return { valid: errors.length === 0, errors };
 }
