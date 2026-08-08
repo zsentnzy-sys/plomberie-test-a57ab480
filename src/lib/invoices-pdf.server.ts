@@ -343,9 +343,35 @@ async function regenerateInvoicePdf(row: StoredInvoice): Promise<Uint8Array> {
     .update(compliance as never)
     .eq("id", row.id);
   if (complianceUpdateError && isFacturx) {
+    const cleanupPaths = [
+      path,
+      `invoices/${row.invoice_date.slice(0, 4)}/${row.invoice_number}-factur-x.xml`,
+    ];
+
+    const cleanup = await supabaseAdmin.storage
+      .from(BUCKET)
+      .remove(cleanupPaths);
+
+    if (cleanup.error) {
+      console.error(
+        "Impossible de nettoyer les artefacts Factur-X après échec de finalisation DB",
+        {
+          invoiceId: row.id,
+          paths: cleanupPaths,
+          complianceUpdateError:
+            complianceUpdateError.message,
+          cleanupError:
+            cleanup.error.message,
+        },
+      );
+    }
+
     throw new FacturxPipelineError(
       "Échec de la finalisation des métadonnées de la facture.",
-      [complianceUpdateError.message ?? "écriture des métadonnées échouée"],
+      [
+        complianceUpdateError.message ??
+          "écriture des métadonnées échouée",
+      ],
     );
   }
   assertSupabaseWriteSucceeded(

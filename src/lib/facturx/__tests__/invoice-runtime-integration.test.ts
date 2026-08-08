@@ -19,6 +19,7 @@ const uploadedFiles: Array<{
 const invoiceUpdates: Record<string, unknown>[] = [];
 
 let failXmlUpload = false;
+let failComplianceUpdate = false;
 
 const invoiceLines = [
   {
@@ -117,22 +118,38 @@ const supabaseAdmin = {
     }
 
     if (table === "invoices") {
-      return {
-        update(
-          payload: Record<string, unknown>,
-        ) {
-          invoiceUpdates.push(payload);
+        return {
+            update(
+            payload: Record<string, unknown>,
+            ) {
+            invoiceUpdates.push(payload);
 
-          return {
-            async eq() {
-              return {
-                data: null,
-                error: null,
-              };
+            return {
+                async eq() {
+                const isComplianceUpdate =
+                    "facturx_version" in payload;
+
+                if (
+                    failComplianceUpdate &&
+                    isComplianceUpdate
+                ) {
+                    return {
+                    data: null,
+                    error: {
+                        message:
+                        "échec persistance simulé",
+                    },
+                    };
+                }
+
+                return {
+                    data: null,
+                    error: null,
+                };
+                },
+            };
             },
-          };
-        },
-      };
+        };
     }
 
     throw new Error(
@@ -162,6 +179,7 @@ describe(
       invoiceUpdates.length = 0;
 
       failXmlUpload = false;
+      failComplianceUpdate = false;
 
       storageBucket.upload.mockClear();
       storageBucket.remove.mockClear();
@@ -532,6 +550,145 @@ describe(
           ),
         ).toBe(false);
       },
+    );
+
+    it(
+        "nettoie le PDF et le XML si la finalisation DB échoue",
+        async () => {
+            failComplianceUpdate = true;
+
+            const {
+            ensureInvoicePdf,
+            } = await import(
+            "../../invoices-pdf.server"
+            );
+
+            const row = {
+            id: "invoice-runtime-db-failure",
+
+            invoice_number:
+                "FACT-2026-9996",
+
+            invoice_date:
+                "2026-01-15",
+
+            payment_method:
+                "Virement bancaire",
+
+            client_name:
+                "Entreprise Témoin SARL",
+
+            client_address:
+                "5 avenue de la Gare\n57000 Metz",
+
+            client_email:
+                "compta@exemple.fr",
+
+            client_phone:
+                "+33 3 87 00 00 00",
+
+            total_ht: 259.9,
+            total_tva: 38.99,
+            total_ttc: 298.89,
+
+            artisan_snapshot:
+                ARTISAN_INFO,
+
+            pdf_storage_path: null,
+
+            status: "draft",
+
+            email_client_status: null,
+            email_client_error: null,
+
+            email_artisan_status: null,
+            email_artisan_error: null,
+
+            invoice_format:
+                "facturx",
+
+            customer_type:
+                "company",
+
+            customer_siren:
+                "123456789",
+
+            customer_siret:
+                "12345678900012",
+
+            customer_vat_number: null,
+
+            customer_country_code:
+                "FR",
+
+            vat_on_debits: true,
+
+            delivery_address: null,
+            delivery_date: null,
+
+            payment_due_date:
+                "2026-02-15",
+
+            payment_reference: null,
+
+            purchase_order_reference: null,
+
+            service_period_start: null,
+            service_period_end: null,
+            };
+
+            await expect(
+            ensureInvoicePdf(row),
+            ).rejects.toThrow(
+            "La génération de la facture Factur-X a échoué.",
+            );
+
+            const pdfPath =
+            "invoices/2026/FACT-2026-9996.pdf";
+
+            const xmlPath =
+            "invoices/2026/FACT-2026-9996-factur-x.xml";
+
+            // Les deux uploads avaient réussi.
+            expect(
+            uploadedFiles.some(
+                (upload) =>
+                upload.path === pdfPath,
+            ),
+            ).toBe(true);
+
+            expect(
+            uploadedFiles.some(
+                (upload) =>
+                upload.path === xmlPath,
+            ),
+            ).toBe(true);
+
+            // Si la DB refuse la finalisation,
+            // aucun artefact ne doit rester publié.
+            expect(
+            storageBucket.remove,
+            ).toHaveBeenCalledWith([
+            pdfPath,
+            xmlPath,
+            ]);
+
+            // Le runtime doit finir en échec.
+            expect(
+            invoiceUpdates.some(
+                (update) =>
+                update
+                    .runtime_validation_status ===
+                "failed",
+            ),
+            ).toBe(true);
+
+            // La facture ne doit jamais être
+            // considérée comme finalisée.
+            expect(
+            row.pdf_storage_path,
+            ).toBeNull();
+        },
     );
   },
 );
