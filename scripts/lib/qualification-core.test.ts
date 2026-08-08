@@ -222,7 +222,7 @@ describe("evaluateQualification — scénario de qualification complet", () => {
     );
 
     expect(result.summary).toContain(
-      "Generator qualification: QUALIFIED",
+      "Generator CI validation: PASSED",
     );
   });
 
@@ -243,16 +243,33 @@ describe("evaluateQualification — scénario de qualification complet", () => {
     ).toBe("QUALIFICATION_FAILED");
 
     expect(result.summary).toContain(
-      "Generator qualification: QUALIFICATION_FAILED",
+      "Generator CI validation: FAILED",
     );
   });
 
   it("annonce la qualification Factur-X quand toute la chaîne passe", () => {
     const text = result.summary.join("\n");
 
-    expect(text).toContain("Qualification Factur-X réussie");
-    expect(text).toContain("Generator qualification: QUALIFIED");
+    expect(text).toContain("Validation Factur-X du générateur réussie");
+    expect(text).toContain("Generator CI validation: PASSED");
     expect(text).toContain(SUCCESS_LINE);
+  });
+
+  it("ne présente jamais la validation CI comme une certification externe", () => {
+    const result = evaluateQualification(inputs());
+    const text = result.summary.join("\n");
+
+    expect(text).not.toMatch(
+      /certifi(é|ée|cation)/i,
+    );
+
+    expect(text).not.toContain(
+      "Qualification Factur-X réussie",
+    );
+
+    expect(text).toContain(
+      "Generator CI validation: PASSED",
+    );
   });
 
   it("échoue si le PDF visible diffère des données structurées", () => {

@@ -289,3 +289,26 @@ export async function assertPdfA3Structure(
 
   return { valid: errors.length === 0, errors };
 }
+
+export interface FacturxPdfBuildResult {
+  bytes: Uint8Array;
+  structure: PdfAStructureCheck;
+}
+
+export async function buildFacturxPdf(
+  pdfBytes: Uint8Array,
+  options: PdfAOptions,
+): Promise<FacturxPdfBuildResult> {
+  const bytes = await toFacturxPdfA3(
+    pdfBytes,
+    options,
+  );
+
+  const structure =
+    await assertPdfA3Structure(bytes);
+
+  return {
+    bytes,
+    structure,
+  };
+}

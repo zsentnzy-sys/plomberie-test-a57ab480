@@ -32,7 +32,8 @@ import { validateXmlWithSchematron } from "../src/lib/facturx/validation/schemat
 import { validateXmlWithXsd } from "../src/lib/facturx/validation/xsd-validator.js"
 import { validatePdfXmlConsistency } from "./lib/pdf-xml-consistency.js";
 
-import { renderDocumentPdf, computeTotals } from "../src/lib/documents.server";
+import { computeTotals } from "../src/lib/documents.server";
+import { generateInvoicePdf } from "../src/lib/invoices.server"
 import { ARTISAN_INFO } from "../src/lib/artisan.server";
 import { buildStructuredInvoice } from "../src/lib/facturx/structured-invoice.server";
 import {
@@ -40,10 +41,7 @@ import {
   validateStructuredInvoice,
   validateXmlSyntax,
 } from "../src/lib/facturx/facturx-xml.server";
-import {
-  assertPdfA3Structure,
-  toFacturxPdfA3,
-} from "../src/lib/facturx/facturx-pdfa.server";
+import { buildFacturxPdf } from "../src/lib/facturx/facturx-pdfa.server";
 import { FACTURX_CONFIG } from "../src/lib/facturx/facturx-config.server";
 
 function runTool(cmd: string, args: string[]): ToolExecutionResult {
@@ -131,30 +129,38 @@ const typedLines = lines.map((l) => ({
   tva: l.tva as 0 | 5.5 | 10 | 20,
 }));
 
-const pdf = await renderDocumentPdf({
-  title: "FACTURE",
-  documentNumber: row.invoice_number,
+const pdf = await generateInvoicePdf({
+  invoiceNumber: row.invoice_number,
+
   artisan: ARTISAN_INFO,
-  client: {
-    name: row.client_name,
-    address: row.client_address,
-    email: row.client_email,
-    phone: row.client_phone,
+
+  input: {
+    client_name: row.client_name,
+    client_address: row.client_address,
+    client_email: row.client_email,
+    client_phone: row.client_phone,
+    payment_method:
+      row.payment_method as
+        | "Carte bancaire"
+        | "Virement bancaire"
+        | "Chèque"
+        | "Espèces",
+    invoice_date: row.invoice_date,
+    lines: typedLines,
   },
-  clientBlockLabel: "Facturé à",
-  metaLines: [`Date : 15/01/2026`, `Paiement : ${row.payment_method}`],
-  lines: typedLines,
+
   totals: computeTotals(typedLines),
-  legal: ARTISAN_INFO.legal,
 });
 
-const hybrid = await toFacturxPdfA3(pdf, {
+const facturxPdf = await buildFacturxPdf(pdf, {
   invoiceNumber: row.invoice_number,
   producer: ARTISAN_INFO.company,
   xml,
 });
 
-const pdfA3SelfChecks = await assertPdfA3Structure(hybrid);
+const hybrid = facturxPdf.bytes;
+
+const pdfA3SelfChecks = facturxPdf.structure;
 
 const pdfPath = join(outDir, "reference.pdf");
 const xmlPath = join(outDir, "factur-x.xml");

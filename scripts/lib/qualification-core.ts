@@ -67,7 +67,7 @@ export interface QualificationResult {
 export const GENERATOR_QUALIFICATION_LINE =
   `Generator qualification: ${GENERATOR_QUALIFICATION.toUpperCase()}`;
 
-export const SUCCESS_LINE = "Qualification Factur-X réussie";
+export const SUCCESS_LINE = "Validation Factur-X du générateur réussie";
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
@@ -266,7 +266,7 @@ export function buildSummary(
     | "QUALIFIED"
     | "QUALIFICATION_FAILED",
 ): string[] {
-  const lines = ["--- Qualification Factur-X ---"];
+  const lines = ["--- Validation Factur-X du générateur ---"];
   for (const step of steps) {
     lines.push(
       step.detail
@@ -274,7 +274,11 @@ export function buildSummary(
         : `${step.name}: ${step.status}`,
     );
   }
-  lines.push(`Generator qualification: ${generatorQualification.toUpperCase()}`);
+  const generatorValidation =
+    generatorQualification === "QUALIFIED"
+      ? "PASSED"
+      : "FAILED";
+  lines.push(`Generator CI validation: ${generatorValidation.toUpperCase()}`);
   if (success) lines.push(SUCCESS_LINE);
   return lines;
 }

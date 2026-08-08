@@ -218,15 +218,17 @@ async function regenerateInvoicePdf(row: StoredInvoice): Promise<Uint8Array> {
       totals: computeTotals(lines),
     });
     if (isFacturx && xml) {
-      const { toFacturxPdfA3, assertPdfA3Structure } = await import(
+      const { buildFacturxPdf } = await import(
         "@/lib/facturx/facturx-pdfa.server"
       );
-      bytes = await toFacturxPdfA3(bytes, {
+      const facturxPdf = await buildFacturxPdf(bytes, {
         invoiceNumber: row.invoice_number,
-        producer: artisan.company || "Facturation",
+        producer:
+          artisan.company || "Facturation",
         xml,
       });
-      const structure = await assertPdfA3Structure(bytes);
+      bytes = facturxPdf.bytes;
+      const structure = facturxPdf.structure;
       if (!structure.valid) {
         throw new FacturxPipelineError(
           `PDF/A-3 non conforme : ${structure.errors[0]}`,

@@ -47,7 +47,18 @@ export type RuntimeValidationStatus =
   | "passed"
   | "failed";
 
-/** CI qualification of the generator build itself. */
+/**
+ * Internal CI validation status of the generator build.
+ *
+ * IMPORTANT:
+ * "qualified" is an internal technical value kept for persistence
+ * compatibility. It means that the generator build passed our complete
+ * automated Factur-X validation pipeline against the official artifacts.
+ *
+ * It does NOT mean that the software has received an external Factur-X
+ * qualification, certification or approval from FNFE-MPE, GS1 France,
+ * FeRD or another third party.
+ */
 export type GeneratorQualificationStatus =
   | "unqualified"
   | "qualified"
@@ -61,15 +72,10 @@ export type ExternalValidationStatus =
   | "invalid";
 
 /**
- * Qualification status of the current generator implementation.
+ * Internal generator-build validation result.
  *
- * The generator is qualified by the end-to-end CI pipeline:
- * - official EN16931 XSD
- * - official EN16931 Schematron
- * - PDF/A-3B veraPDF validation
- * - embedded XML extraction and consistency
- * - Factur-X XMP / associated-file structural checks
- * - visible PDF / structured-data consistency
+ * This must never be presented to users as an official certification
+ * or third-party qualification.
  */
 export const GENERATOR_QUALIFICATION: GeneratorQualificationStatus =
   "qualified";
