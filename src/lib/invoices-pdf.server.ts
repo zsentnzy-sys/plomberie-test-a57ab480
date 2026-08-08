@@ -291,9 +291,31 @@ async function regenerateInvoicePdf(row: StoredInvoice): Promise<Uint8Array> {
         upsert: true,
       },);
     if (xmlUpload.error) {
+      const cleanup = await supabaseAdmin.storage
+        .from(BUCKET)
+        .remove([path]);
+
+      if (cleanup.error) {
+        console.error(
+          "Impossible de nettoyer le PDF après échec de l'upload XML Factur-X",
+          {
+            invoiceId: row.id,
+            pdfPath: path,
+            xmlPath,
+            xmlUploadError:
+              xmlUpload.error.message,
+            cleanupError:
+              cleanup.error.message,
+          },
+        );
+      }
+
       throw new FacturxPipelineError(
         "Écriture du XML Factur-X impossible : génération interrompue.",
-        [xmlUpload.error.message ?? "upload XML échoué"],
+        [
+          xmlUpload.error.message ??
+            "upload XML échoué",
+        ],
       );
     }
     const { buildInvoiceComplianceMetadata } = await import(
